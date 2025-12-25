@@ -1,4 +1,6 @@
 /sample-project
 .DS_Store
 /upload-service/node_modules
-/upload-service/
+/upload-service/dist
+/upload-service/dist-ssr
+/upload-service/*.local
