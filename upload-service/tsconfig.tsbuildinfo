@@ -1,0 +1,1 @@
+{"root":["./src/auth.ts","./src/daemon.ts","./src/db.ts","./src/index.ts","./src/minio.ts","./src/store.ts","./src/utils.ts"],"version":"5.9.3"}
