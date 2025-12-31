@@ -23,10 +23,13 @@ async function connectDB() {
 connectDB();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: '*'
+}));
 app.use(express.json());
 
 app.post('/signup', async function (req:any, res:any) {
+  console.log('inside signup endpoint')
   console.log(req.body)
   const username = req.body.username;
   const password = req.body.password;
@@ -83,6 +86,7 @@ app.post('/signin', async function(req:any, res:any){
  * List all live projects
  */
 app.get('/viewProjects', authMiddleware, async (req: any, res: any)=>{
+    console.log('going to fetch all projects');
     const userId = req.id;
     console.log('finding the projects from mongoDB');
     const result = await ProjectModel.find({
@@ -185,7 +189,11 @@ app.post('/deploy', authMiddleware, async (req: any, res: any)=>{
         console.log('returning from the function'); 
         //console.log('printing all file paths', filePaths);
         res.json({
-            id: id
+            url: repoUrl,
+            userId : userId,
+            projectId : id,
+            commitSha: commitSha,
+            defaultBranch: defaultBranch,
         });
     }
     catch(err:any){
