@@ -16,7 +16,18 @@ import { JWT_SECRET, authMiddleware } from "./auth";
 import { UserModel, ProjectModel } from "./db";
 import axios from "axios";
 import { error } from "console";
- 
+import { Queue } from "bullmq";
+import Redis from "ioredis";
+
+/**
+ * ARCHITECTURE:
+ * - daemon.ts: Runs as separate process. Checks for new commits and pushes jobs to queue
+ * - worker.ts: Runs as separate process. Listens to queue and processes deployment jobs
+ * - index.ts: Express API server. Handles user requests and queues new deployments
+ * 
+ * All three processes connect to the same Redis queue called "deployments"
+ */
+
 async function connectDB() {
   await mongoose.connect('mongodb://localhost:27017');
 }
@@ -27,6 +38,21 @@ app.use(cors({
   origin: '*'
 }));
 app.use(express.json());
+
+// Redis connection for queue
+const redis = new Redis({
+  host: 'localhost',
+  port: 6379,
+  maxRetriesPerRequest: null,
+});
+
+// Connect to the same queue that daemon.ts pushes to and worker.ts processes
+const deploymentQueue = new Queue('deployments', {
+  connection: redis,
+});
+
+
+
 
 app.post('/signup', async function (req:any, res:any) {
   console.log('inside signup endpoint')
@@ -157,11 +183,11 @@ app.post('/deploy', authMiddleware, async (req: any, res: any)=>{
         console.log(clonePath);
         console.log(__dirname);
         //await simpleGit().clone(repoUrl, clonePath);
-        await simpleGit().clone(repoUrl, mirrorPath, ["--mirror"]);
-        await simpleGit().clone(mirrorPath, clonePath);
-        const files = getAllFiles(clonePath);
+        //await simpleGit().clone(repoUrl, mirrorPath, ["--mirror"]);
+        //await simpleGit().clone(mirrorPath, clonePath);
+        //const files = getAllFiles(clonePath);
 
-        for (const file of files) {
+        /* for (const file of files) {
           const localPath = path.join(clonePath, file);
           const objectKey = `${id}/${file}`;
 
@@ -170,8 +196,8 @@ app.post('/deploy', authMiddleware, async (req: any, res: any)=>{
             objectKey,
             localPath
           );
-        }
-        console.log('Entering the uploaded project details into mongoDB');
+        } */
+        //console.log('Entering the uploaded project details into mongoDB');
         let defaultBranch = 'main';
         const response = await axios.get(repoMeta);
         defaultBranch = response.data.default_branch;
@@ -179,6 +205,21 @@ app.post('/deploy', authMiddleware, async (req: any, res: any)=>{
         const commitSha = response2.data.commit.sha;
         console.log('Default branch is: ' + defaultBranch);
         console.log('Commit SHA is: ' + commitSha);
+
+        const jobData = {
+                  projectId: id, 
+                  repoUrl: repoUrl,
+                  userId: userId,
+                  commitSha: commitSha,
+                  defaultBranch: defaultBranch,
+      };
+                
+        const job = await deploymentQueue.add('deploy', jobData, {
+          attempts: 3,                                    // Retry up to 3 times
+          backoff: { type: 'exponential', delay: 2000 }, // Wait 2s, 4s, 8s between retries
+          removeOnComplete: true,                         // Auto-cleanup on success
+        });
+
         await ProjectModel.create({
           url: repoUrl,
           userId : userId,
