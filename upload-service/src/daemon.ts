@@ -43,7 +43,7 @@ async function daemonTask() {
     console.log(`Checking project: ${project.projectId}`);
     const currentSha = project.commitSha;
     const repoUrl = project.url;
-    const repoMeta = repoUrl.replace('https://github.com/', 'https://api.github.com/repos/');
+    const repoMeta = repoUrl.replace('.git', '').replace('https://github.com/', 'https://api.github.com/repos/');
     const branchName = project.defaultBranch;
     
     try {

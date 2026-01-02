@@ -170,7 +170,7 @@ app.delete('/deleteProject', authMiddleware, async (req: any, res: any)=>{
 app.post('/deploy', authMiddleware, async (req: any, res: any)=>{
     const repoUrl = req.body.repoUrl;
     console.log('repoUrl is: ' + repoUrl);
-    const repoMeta = repoUrl.replace('https://github.com/','https://api.github.com/repos/')
+    const repoMeta = repoUrl.replace('.git', '').replace('https://github.com/','https://api.github.com/repos/')
     console.log('repoMeta is: ' + repoMeta);
     const userId = req.id;
     const id = generateProjectId();
