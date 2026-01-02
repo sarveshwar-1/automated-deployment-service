@@ -1,160 +1,103 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Button, Input, Alert } from '../components';
-import { authAPI } from '../api/client';
-import { useAuthStore } from '../store';
-import { FiMail, FiLock, FiUser } from 'react-icons/fi';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import '../styles/Auth.css';
 
-export const SignUp: React.FC = () => {
+const ip = "10.12.67.131"
+function SignUp() {
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { setUser, setToken, setLoading, setError, isLoading, error } = useAuthStore();
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
-  const [validationError, setValidationError] = useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
-    setValidationError('');
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setValidationError('');
-
-    // Validation
-    if (!formData.name || !formData.email || !formData.password) {
-      setValidationError('All fields are required');
-      return;
-    }
-
-    if (formData.password !== formData.confirmPassword) {
-      setValidationError('Passwords do not match');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setValidationError('Password must be at least 6 characters');
-      return;
-    }
+    setError('');
+    setLoading(true);
 
     try {
-      setLoading(true);
-      setError(null);
-      const response = await authAPI.signup(
-        formData.email,
-        formData.password,
-        formData.name
-      );
+      const response = await fetch(`http://${ip}:3002/signup`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+        }),
+      });
 
-      const { user, token } = response.data;
-      setUser(user);
-      setToken(token);
-      navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Signup failed. Please try again.');
+      const data = await response.json();
+
+      if (data.message === 'User successfully signed up') {
+        navigate('/signin');
+      } else {
+        setError(data.message || 'Signup failed');
+      }
+    } catch (err) {
+      setError('Failed to sign up. Please try again.');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Deploy</h1>
-          <p className="text-gray-600">Create your deployment platform account</p>
-        </div>
-
-        {/* Card */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          {error && (
-            <Alert
-              type="error"
-              message={error}
-              onClose={() => setError(null)}
-            />
-          )}
-
-          {validationError && (
-            <Alert
-              type="error"
-              message={validationError}
-              onClose={() => setValidationError('')}
-            />
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Name Input */}
-            <Input
-              label="Full Name"
+    <div className="auth-container">
+      <div className="auth-box">
+        <h2>Sign Up</h2>
+        {error && <div className="error-message">{error}</div>}
+        
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="username">Username</label>
+            <input
               type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              placeholder="John Doe"
-              icon={<FiUser />}
+              id="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              placeholder="Enter your username"
             />
+          </div>
 
-            {/* Email Input */}
-            <Input
-              label="Email Address"
+          <div className="form-group">
+            <label htmlFor="email">Email</label>
+            <input
               type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="you@example.com"
-              icon={<FiMail />}
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="Enter your email"
             />
+          </div>
 
-            {/* Password Input */}
-            <Input
-              label="Password"
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <input
               type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="••••••••"
-              icon={<FiLock />}
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Enter your password"
             />
+          </div>
 
-            {/* Confirm Password Input */}
-            <Input
-              label="Confirm Password"
-              type="password"
-              name="confirmPassword"
-              value={formData.confirmPassword}
-              onChange={handleChange}
-              placeholder="••••••••"
-              icon={<FiLock />}
-            />
+          <button type="submit" disabled={loading}>
+            {loading ? 'Signing Up...' : 'Sign Up'}
+          </button>
+        </form>
 
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              isLoading={isLoading}
-              className="w-full mt-6"
-            >
-              Create Account
-            </Button>
-          </form>
-
-          {/* Sign In Link */}
-          <p className="text-center text-gray-600 mt-6">
-            Already have an account?{' '}
-            <Link to="/signin" className="text-blue-600 hover:text-blue-700 font-medium">
-              Sign In
-            </Link>
-          </p>
-        </div>
+        <p className="auth-link">
+          Already have an account? <a href="/signin">Sign In</a>
+        </p>
       </div>
     </div>
   );
-};
+}
+
+export default SignUp;

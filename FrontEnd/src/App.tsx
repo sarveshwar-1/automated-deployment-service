@@ -1,54 +1,70 @@
-import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from './store';
-import { SignUp } from './pages/SignUp';
-import { SignIn } from './pages/SignIn';
-import { Dashboard } from './pages/Dashboard';
-import { CreateProject } from './pages/CreateProject';
-import { ProtectedRoute } from './routes/ProtectedRoute';
+import { useState, useEffect } from 'react';
+import SignUp from './pages/SignUp';
+import SignIn from './pages/SignIn';
+import Deploy from './pages/Deploy';
+import ViewProjects from './pages/ViewProjects';
+import './App.css';
 
 function App() {
-  const { user, token, setLoading } = useAuthStore();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Initialize auth state from localStorage on app load
     const token = localStorage.getItem('token');
-    if (token) {
-      setLoading(true);
-      // The ProtectedRoute will handle fetching the user profile
-      setLoading(false);
-    }
-  }, [setLoading]);
+    setIsAuthenticated(!!token);
+    setLoading(false);
+  }, []);
+
+  if (loading) {
+    return <div className="loading">Loading...</div>;
+  }
 
   return (
     <Router>
-      <Routes>
-        {/* Auth Routes */}
-        <Route
-          path="/signup"
-          element={user ? <Navigate to="/dashboard" replace /> : <SignUp />}
-        />
-        <Route
-          path="/signin"
-          element={user ? <Navigate to="/dashboard" replace /> : <SignIn />}
-        />
+      <div className="app-container">
+        <nav className="navbar">
+          <div className="nav-brand">Vercel Clone</div>
+          {isAuthenticated && (
+            <div className="nav-links">
+              <a href="/deploy">Deploy</a>
+              <a href="/projects">My Projects</a>
+              <button 
+                onClick={() => {
+                  localStorage.removeItem('token');
+                  setIsAuthenticated(false);
+                  window.location.href = '/signin';
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          )}
+        </nav>
 
-        {/* Protected Routes */}
-        <Route
-          path="/dashboard"
-          element={<ProtectedRoute component={<Dashboard />} />}
-        />
-        <Route
-          path="/create-project"
-          element={<ProtectedRoute component={<CreateProject />} />}
-        />
-
-        {/* Default Route */}
-        <Route
-          path="/"
-          element={user ? <Navigate to="/dashboard" replace /> : <Navigate to="/signin" replace />}
-        />
-      </Routes>
+        <Routes>
+          <Route 
+            path="/signup" 
+            element={!isAuthenticated ? <SignUp /> : <Navigate to="/deploy" />} 
+          />
+          <Route 
+            path="/signin" 
+            element={!isAuthenticated ? <SignIn setIsAuthenticated={setIsAuthenticated} /> : <Navigate to="/deploy" />} 
+          />
+          <Route 
+            path="/deploy" 
+            element={isAuthenticated ? <Deploy /> : <Navigate to="/signin" />} 
+          />
+          <Route 
+            path="/projects" 
+            element={isAuthenticated ? <ViewProjects /> : <Navigate to="/signin" />} 
+          />
+          <Route 
+            path="/" 
+            element={isAuthenticated ? <Navigate to="/deploy" /> : <Navigate to="/signup" />} 
+          />
+        </Routes>
+      </div>
     </Router>
   );
 }

@@ -1,105 +1,96 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { Button, Input, Alert } from '../components';
-import { authAPI } from '../api/client';
-import { useAuthStore } from '../store';
-import { FiMail, FiLock } from 'react-icons/fi';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import '../styles/Auth.css';
 
-export const SignIn: React.FC = () => {
+interface SignInProps {
+  setIsAuthenticated: (value: boolean) => void;
+}
+
+const ip = "10.12.67.131"
+
+function SignIn({ setIsAuthenticated }: SignInProps) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { setUser, setToken, setLoading, setError, isLoading, error } = useAuthStore();
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-  });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value,
-    }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setLoading(true);
 
     try {
-      setLoading(true);
-      setError(null);
-      const response = await authAPI.signin(formData.email, formData.password);
+      const response = await fetch(`http://${ip}:3002/signin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
+      });
 
-      const { user, token } = response.data;
-      setUser(user);
-      setToken(token);
-      navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Sign in failed. Please try again.');
+      const data = await response.json();
+
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        setIsAuthenticated(true);
+        navigate('/deploy');
+      } else {
+        setError(data.message || 'Sign in failed');
+      }
+    } catch (err) {
+      setError('Failed to sign in. Please try again.');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Deploy</h1>
-          <p className="text-gray-600">Sign in to your deployment platform</p>
-        </div>
-
-        {/* Card */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          {error && (
-            <Alert
-              type="error"
-              message={error}
-              onClose={() => setError(null)}
-            />
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email Input */}
-            <Input
-              label="Email Address"
+    <div className="auth-container">
+      <div className="auth-box">
+        <h2>Sign In</h2>
+        {error && <div className="error-message">{error}</div>}
+        
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label htmlFor="email">Email</label>
+            <input
               type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="you@example.com"
-              icon={<FiMail />}
+              id="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="Enter your email"
             />
+          </div>
 
-            {/* Password Input */}
-            <Input
-              label="Password"
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <input
               type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              placeholder="••••••••"
-              icon={<FiLock />}
+              id="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              placeholder="Enter your password"
             />
+          </div>
 
-            {/* Submit Button */}
-            <Button
-              type="submit"
-              isLoading={isLoading}
-              className="w-full mt-6"
-            >
-              Sign In
-            </Button>
-          </form>
+          <button type="submit" disabled={loading}>
+            {loading ? 'Signing In...' : 'Sign In'}
+          </button>
+        </form>
 
-          {/* Sign Up Link */}
-          <p className="text-center text-gray-600 mt-6">
-            Don't have an account?{' '}
-            <Link to="/signup" className="text-blue-600 hover:text-blue-700 font-medium">
-              Sign Up
-            </Link>
-          </p>
-        </div>
+        <p className="auth-link">
+          Don't have an account? <a href="/signup">Sign Up</a>
+        </p>
       </div>
     </div>
   );
-};
+}
+
+export default SignIn;
