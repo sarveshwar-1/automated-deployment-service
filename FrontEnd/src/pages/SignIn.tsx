@@ -6,7 +6,7 @@ interface SignInProps {
   setIsAuthenticated: (value: boolean) => void;
 }
 
-const ip = "10.12.67.131"
+const ip = "127.0.0.1"
 
 function SignIn({ setIsAuthenticated }: SignInProps) {
   const [email, setEmail] = useState('');

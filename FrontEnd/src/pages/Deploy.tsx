@@ -9,7 +9,7 @@ interface DeployResponse {
   defaultBranch: string;
 }
 
-const ip = "10.12.67.131"
+const ip = "127.0.0.1"
 
 function Deploy() {
   const [repoUrl, setRepoUrl] = useState('');

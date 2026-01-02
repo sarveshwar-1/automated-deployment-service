@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../styles/Auth.css';
 
-const ip = "10.12.67.131"
+const ip = "127.0.0.1"
 function SignUp() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');

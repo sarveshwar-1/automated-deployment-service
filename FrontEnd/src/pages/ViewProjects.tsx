@@ -9,7 +9,7 @@ interface Project {
   commitSha: string;
   userId: string;
 }
-const ip = "10.12.67.131"
+const ip = "127.0.0.1"
 function ViewProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
