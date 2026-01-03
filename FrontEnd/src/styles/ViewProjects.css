@@ -120,12 +120,49 @@
   text-decoration: underline;
 }
 
+.preview-link {
+  background: #e8f5e9;
+  padding: 8px;
+  border-radius: 4px;
+  color: #2e7d32;
+  text-decoration: none;
+  font-size: 13px;
+  display: block;
+  word-break: break-all;
+}
+
+.preview-link:hover {
+  text-decoration: underline;
+  background: #c8e6c9;
+}
+
 .card-footer {
   padding: 0 20px 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.preview-btn {
+  flex: 1;
+  padding: 10px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  text-decoration: none;
+  text-align: center;
+}
+
+.preview-btn:hover {
+  opacity: 0.9;
 }
 
 .delete-btn {
-  width: 100%;
+  flex: 1;
   padding: 10px;
   background: #ff6b6b;
   color: white;

@@ -2,8 +2,8 @@ import { Queue, Worker } from "bullmq";
 import Redis from "ioredis";
 import simpleGit from "simple-git";
 import path from "path";
-import { minioClient } from "./minio.js";  
-import { getAllFiles } from "./utils.js";
+import { minioClient } from "./minio";  
+import { getAllFiles } from "./utils";
 import fs from "fs";
 
 // Redis connection for queue
@@ -15,6 +15,11 @@ const redis = new Redis({
 
 // Connect to the same queue that daemon.ts pushes to
 const deploymentQueue = new Queue('deployments', {
+  connection: redis,
+});
+
+// Build queue - to queue build jobs after upload completes
+const buildQueue = new Queue('builds', {
   connection: redis,
 });
 
@@ -63,6 +68,22 @@ const deploymentWorker = new Worker(
       }
 
       console.log(`Deployment completed for project ${projectId} (${uploadedCount} files uploaded)`);
+
+      // ---- QUEUE BUILD JOB ----
+      console.log(`📦 Queuing build job for project ${projectId}...`);
+      await buildQueue.add('build', {
+        projectId,
+        repoUrl,
+        userId,
+        commitSha,
+        defaultBranch,
+      }, {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: true,
+      });
+      console.log(`✅ Build job queued for project ${projectId}`);
+
       return { success: true, projectId, filesUploaded: uploadedCount };
     } catch (err: any) {
       console.error(`Deployment failed: ${err.message}`);

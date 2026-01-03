@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import '../styles/ViewProjects.css';
+import { useState, useEffect } from "react";
+import "../styles/ViewProjects.css";
 
 interface Project {
   _id: string;
@@ -9,11 +9,15 @@ interface Project {
   commitSha: string;
   userId: string;
 }
-const ip = "127.0.0.1"
+
+const API_HOST = "127.0.0.1";
+const API_PORT = 3002;
+const BUILD_SERVICE_HOST = "127.0.0.1";
+const BUILD_SERVICE_PORT = 3003;
 function ViewProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,32 +26,35 @@ function ViewProjects() {
 
   const fetchProjects = async () => {
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       if (!token) {
-        setError('No authentication token found');
+        setError("No authentication token found");
         setLoading(false);
         return;
       }
 
-      const response = await fetch(`http://${ip}:3002/viewProjects`, {
-        method: 'GET',
-        headers: {
-          'token': `${token}`,
-        },
-      });
+      const response = await fetch(
+        `http://${API_HOST}:${API_PORT}/viewProjects`,
+        {
+          method: "GET",
+          headers: {
+            token: `${token}`,
+          },
+        }
+      );
 
       const data = await response.json();
 
       if (data.results && Array.isArray(data.results)) {
         setProjects(data.results);
       } else {
-        setError('Failed to fetch projects');
+        setError("Failed to fetch projects");
       }
     } catch (err) {
-      setError('Failed to load projects. Please try again.');
+      setError("Failed to load projects. Please try again.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -55,39 +62,42 @@ function ViewProjects() {
   };
 
   const handleDeleteProject = async (projectId: string) => {
-    if (!window.confirm('Are you sure you want to delete this project?')) {
+    if (!window.confirm("Are you sure you want to delete this project?")) {
       return;
     }
 
     setDeleting(projectId);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       if (!token) {
-        setError('No authentication token found');
+        setError("No authentication token found");
         return;
       }
 
-      const response = await fetch(`http://${ip}:3002/deleteProject`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'token': `${token}`,
-        },
-        body: JSON.stringify({
-          projectId,
-        }),
-      });
+      const response = await fetch(
+        `http://${API_HOST}:${API_PORT}/deleteProject`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            token: `${token}`,
+          },
+          body: JSON.stringify({
+            projectId,
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (response.ok && data.message) {
-        setProjects(projects.filter(p => p.projectId !== projectId));
+        setProjects(projects.filter((p) => p.projectId !== projectId));
       } else {
-        setError(data.error || 'Failed to delete project');
+        setError(data.error || "Failed to delete project");
       }
     } catch (err) {
-      setError('Failed to delete project. Please try again.');
+      setError("Failed to delete project. Please try again.");
       console.error(err);
     } finally {
       setDeleting(null);
@@ -95,7 +105,11 @@ function ViewProjects() {
   };
 
   if (loading) {
-    return <div className="projects-container"><p>Loading projects...</p></div>;
+    return (
+      <div className="projects-container">
+        <p>Loading projects...</p>
+      </div>
+    );
   }
 
   return (
@@ -107,7 +121,9 @@ function ViewProjects() {
 
         {projects.length === 0 ? (
           <div className="no-projects">
-            <p>No projects yet. <a href="/deploy">Deploy your first project</a></p>
+            <p>
+              No projects yet. <a href="/deploy">Deploy your first project</a>
+            </p>
           </div>
         ) : (
           <div className="projects-grid">
@@ -115,7 +131,7 @@ function ViewProjects() {
               <div key={project._id} className="project-card">
                 <div className="card-header">
                   <h3 className="project-name">
-                    {project.url.split('/').pop()}
+                    {project.url.split("/").pop()}
                   </h3>
                 </div>
 
@@ -127,7 +143,12 @@ function ViewProjects() {
 
                   <div className="info-row">
                     <label>Repository</label>
-                    <a href={project.url} target="_blank" rel="noopener noreferrer" className="repo-link">
+                    <a
+                      href={project.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="repo-link"
+                    >
                       {project.url}
                     </a>
                   </div>
@@ -138,18 +159,33 @@ function ViewProjects() {
                   </div>
 
                   <div className="info-row">
-                    <label>Commit SHA</label>
-                    <code>{project.commitSha.substring(0, 7)}</code>
+                    <label>Preview URL</label>
+                    <a
+                      href={`http://${BUILD_SERVICE_HOST}:${BUILD_SERVICE_PORT}/${project.projectId}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="preview-link"
+                    >
+                      {`http://${BUILD_SERVICE_HOST}:${BUILD_SERVICE_PORT}/${project.projectId}/`}
+                    </a>
                   </div>
                 </div>
 
                 <div className="card-footer">
+                  <a
+                    href={`http://${BUILD_SERVICE_HOST}:${BUILD_SERVICE_PORT}/${project.projectId}/`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="preview-btn"
+                  >
+                    🚀 Preview
+                  </a>
                   <button
                     className="delete-btn"
                     onClick={() => handleDeleteProject(project.projectId)}
                     disabled={deleting === project.projectId}
                   >
-                    {deleting === project.projectId ? 'Deleting...' : 'Delete'}
+                    {deleting === project.projectId ? "Deleting..." : "Delete"}
                   </button>
                 </div>
               </div>

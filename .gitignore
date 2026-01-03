@@ -4,3 +4,9 @@
 /upload-service/dist
 /upload-service/dist-ssr
 /upload-service/*.local
+/build-service/node_modules
+/build-service/dist
+/build-service/*.local
+/Frontend/node_modules
+/Frontend/dist
+/Frontend/*.local
