@@ -42,7 +42,8 @@ async function downloadFromMinio(
     true
   );
 
-  const downloadPromises: Promise<void>[] = [];
+  // First, collect all objects and create directory structure
+  const objectsToDownload: { objectName: string; localFilePath: string }[] = [];
 
   for await (const obj of objectsStream) {
     const objectName = obj.name;
@@ -52,42 +53,60 @@ async function downloadFromMinio(
     const relativePath = objectName.replace(`${projectId}/`, "");
     const localFilePath = path.join(localPath, relativePath);
 
-    // Create directory structure
+    // Create directory structure synchronously before any downloads
     const fileDir = path.dirname(localFilePath);
     if (!fs.existsSync(fileDir)) {
       fs.mkdirSync(fileDir, { recursive: true });
     }
 
-    // Download the file
-    downloadPromises.push(
-      minioClient.fGetObject(BUCKETS.SOURCE_CODE, objectName, localFilePath)
-    );
+    objectsToDownload.push({ objectName, localFilePath });
   }
 
-  await Promise.all(downloadPromises);
+  console.log(`📦 Found ${objectsToDownload.length} files to download`);
+
+  // Now download all files sequentially to avoid race conditions
+  for (const { objectName, localFilePath } of objectsToDownload) {
+    await minioClient.fGetObject(BUCKETS.SOURCE_CODE, objectName, localFilePath);
+    
+    // Verify the file was downloaded correctly
+    if (fs.existsSync(localFilePath)) {
+      const stats = fs.statSync(localFilePath);
+      console.log(`  📄 Downloaded: ${objectName} (${stats.size} bytes)`);
+      
+      // Check if file is empty (potential issue)
+      if (stats.size === 0) {
+        console.warn(`  ⚠️ Warning: Downloaded file is empty: ${objectName}`);
+      }
+    } else {
+      console.error(`  ❌ Failed to download: ${objectName}`);
+    }
+  }
+
   console.log(`✅ Downloaded all source files for project ${projectId}`);
 }
 
 // Helper function to detect and run build commands
 async function runBuildCommands(
   projectPath: string
-): Promise<{ stdout: string; stderr: string }> {
-  console.log(`🔨 Running build commands in ${projectPath}...`);
+): Promise<{ stdout: string; stderr: string; isStatic: boolean }> {
+  console.log(`🔨 Checking build setup in ${projectPath}...`);
 
   // Check if package.json exists
   const packageJsonPath = path.join(projectPath, "package.json");
   if (!fs.existsSync(packageJsonPath)) {
-    throw new Error("No package.json found in the project");
+    console.log("No package.json found, treating as static site");
+    return { stdout: "", stderr: "", isStatic: true };
   }
 
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
 
   // Check if build script exists
-  if (packageJson.scripts?.build) {
-    console.log(`Found build script: ${packageJson.scripts.build}`);
-  } else {
-    throw new Error("No build script found in package.json");
+  if (!packageJson.scripts?.build) {
+    console.log("No build script found, treating as static site");
+    return { stdout: "", stderr: "", isStatic: true };
   }
+
+  console.log(`Found build script: ${packageJson.scripts.build}`);
 
   // Determine package manager (npm, pnpm, yarn)
   let installCommand = "npm install";
@@ -116,7 +135,7 @@ async function runBuildCommands(
     console.log("Build stderr:", stderr);
   }
 
-  return { stdout, stderr };
+  return { stdout, stderr, isStatic: false };
 }
 
 // Helper function to find the build output directory
@@ -145,14 +164,62 @@ function findBuildOutputDir(projectPath: string): string {
   throw new Error("Could not find build output directory");
 }
 
+// Helper function to rewrite asset paths in HTML/CSS/JS files to include projectId prefix
+function rewriteAssetPaths(content: string, projectId: string, fileType: string): string {
+  // For HTML files, rewrite src, href, and content attributes that start with /
+  if (fileType === 'html') {
+    // Rewrite src="/..." to src="/projectId/..."
+    content = content.replace(/src="\//g, `src="/${projectId}/`);
+    content = content.replace(/src='\//g, `src='/${projectId}/`);
+    
+    // Rewrite href="/..." to href="/projectId/..." (but not href="http" or href="https" or href="#")
+    content = content.replace(/href="\/(?!\/)/g, `href="/${projectId}/`);
+    content = content.replace(/href='\/(?!\/)/g, `href='/${projectId}/`);
+    
+    // Rewrite content URLs in meta tags (e.g., og:image)
+    content = content.replace(/content="\/(?!\/)/g, `content="/${projectId}/`);
+    content = content.replace(/content='\/(?!\/)/g, `content='/${projectId}/`);
+  }
+  
+  // For JS files, rewrite common patterns for asset loading
+  if (fileType === 'js') {
+    // Rewrite "/static/ patterns commonly used in React/webpack builds
+    content = content.replace(/"\/static\//g, `"/${projectId}/static/`);
+    content = content.replace(/'\/static\//g, `'/${projectId}/static/`);
+    
+    // Rewrite manifest.json and other root-level assets
+    content = content.replace(/"\/manifest\.json"/g, `"/${projectId}/manifest.json"`);
+    content = content.replace(/"\/favicon\.ico"/g, `"/${projectId}/favicon.ico"`);
+  }
+  
+  // For CSS files, rewrite url() references
+  if (fileType === 'css') {
+    content = content.replace(/url\(\//g, `url(/${projectId}/`);
+    content = content.replace(/url\("\//g, `url("/${projectId}/`);
+    content = content.replace(/url\('\//g, `url('/${projectId}/`);
+  }
+  
+  return content;
+}
+
+// Helper function to get file type category for rewriting
+function getFileTypeCategory(filename: string): string | null {
+  const ext = path.extname(filename).toLowerCase();
+  if (ext === '.html' || ext === '.htm') return 'html';
+  if (ext === '.js' || ext === '.mjs') return 'js';
+  if (ext === '.css') return 'css';
+  return null;
+}
+
 // Helper function to upload built files to MinIO
 async function uploadToMinio(
   projectId: string,
   buildPath: string
 ): Promise<number> {
-  console.log(`📤 Uploading built files for project ${projectId} to MinIO...`);
+  console.log(`📤 Uploading built files for project ${projectId} to MinIO from ${buildPath}...`);
 
   const files = getAllFiles(buildPath);
+  console.log(`Found ${files.length} files to upload:`, files.slice(0, 10)); // Log first 10 files
   let uploadedCount = 0;
 
   for (const file of files) {
@@ -162,11 +229,56 @@ async function uploadToMinio(
     // Determine content type based on file extension
     const contentType = getContentType(file);
 
-    await minioClient.fPutObject(BUCKETS.STATIC_BUILDS, objectKey, localPath, {
-      "Content-Type": contentType,
-    });
+    // Verify file exists and has content before uploading
+    if (!fs.existsSync(localPath)) {
+      console.warn(`  ⚠️ Skipping non-existent file: ${file}`);
+      continue;
+    }
+
+    const stats = fs.statSync(localPath);
+    if (stats.size === 0) {
+      console.warn(`  ⚠️ Warning: File is empty, but uploading anyway: ${file}`);
+    }
+
+    // Check if this file needs asset path rewriting
+    const fileTypeCategory = getFileTypeCategory(file);
+    let fileContent = fs.readFileSync(localPath);
+    let finalSize = fileContent.length;
+    
+    if (fileTypeCategory) {
+      // Rewrite asset paths in HTML, JS, and CSS files
+      let textContent = fileContent.toString('utf-8');
+      const originalLength = textContent.length;
+      textContent = rewriteAssetPaths(textContent, projectId, fileTypeCategory);
+      
+      if (textContent.length !== originalLength) {
+        console.log(`  🔄 Rewrote asset paths in: ${file}`);
+      }
+      
+      // Write the modified content to a temp file for upload
+      const tempPath = `${localPath}.modified`;
+      fs.writeFileSync(tempPath, textContent, 'utf-8');
+      finalSize = textContent.length;
+      
+      console.log(`  📄 Uploading: ${file} (${finalSize} bytes, type: ${contentType})`);
+      
+      await minioClient.fPutObject(BUCKETS.STATIC_BUILDS, objectKey, tempPath, {
+        "Content-Type": contentType,
+        "X-Amz-Meta-Original-Size": stats.size.toString(),
+      });
+      
+      // Clean up temp file
+      fs.unlinkSync(tempPath);
+    } else {
+      console.log(`  📄 Uploading: ${file} (${finalSize} bytes, type: ${contentType})`);
+      
+      await minioClient.fPutObject(BUCKETS.STATIC_BUILDS, objectKey, localPath, {
+        "Content-Type": contentType,
+        "X-Amz-Meta-Original-Size": stats.size.toString(),
+      });
+    }
+    
     uploadedCount++;
-    console.log(`  📄 Uploaded: ${file}`);
   }
 
   console.log(`✅ Uploaded ${uploadedCount} files to ${BUCKETS.STATIC_BUILDS} bucket`);
@@ -194,10 +306,23 @@ const buildWorker = new Worker(
       await downloadFromMinio(projectId, buildPath);
 
       // Step 3: Run build commands
-      await runBuildCommands(buildPath);
+      const buildResult = await runBuildCommands(buildPath);
+      const isStatic = buildResult.isStatic;
 
       // Step 4: Find and upload build output
-      const outputDir = findBuildOutputDir(buildPath);
+      const outputDir = isStatic ? buildPath : findBuildOutputDir(buildPath);
+
+      // Check if index.html exists and has content
+      const indexPath = path.join(outputDir, "index.html");
+      if (!fs.existsSync(indexPath)) {
+        throw new Error("Build output does not contain index.html");
+      }
+      const indexContent = fs.readFileSync(indexPath, "utf-8");
+      if (indexContent.trim().length === 0) {
+        throw new Error("Built index.html is empty");
+      }
+      console.log(`✅ Found valid index.html (${indexContent.length} characters)`);
+
       const uploadedCount = await uploadToMinio(projectId, outputDir);
 
       // Step 5: Clean up

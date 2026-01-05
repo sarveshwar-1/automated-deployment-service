@@ -17,7 +17,7 @@ app.get("/health", (req: Request, res: Response) => {
 // Route: /:projectId/{*filePath} - serves files for a specific project (Express 5 syntax)
 app.get("/:projectId/{*filePath}", async (req: Request, res: Response) => {
   const { projectId } = req.params;
-  const rawFilePath = req.params.filePath as string;
+  const rawFilePath = Array.isArray(req.params.filePath) ? req.params.filePath.join('/') : req.params.filePath;
 
   // Get the file path from the URL (everything after projectId)
   let filePath = rawFilePath || "index.html";

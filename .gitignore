@@ -3,6 +3,7 @@
 /upload-service/node_modules
 /upload-service/dist
 /upload-service/dist-ssr
+/upload-service/src/gitBare
 /upload-service/*.local
 /build-service/node_modules
 /build-service/dist

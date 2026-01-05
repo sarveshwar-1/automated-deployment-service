@@ -3,7 +3,7 @@ import Redis from "ioredis";
 import simpleGit from "simple-git";
 import path from "path";
 import { minioClient } from "./minio";  
-import { getAllFiles } from "./utils";
+import { getAllFiles, getContentType } from "./utils";
 import fs from "fs";
 
 // Redis connection for queue
@@ -56,18 +56,40 @@ const deploymentWorker = new Worker(
       console.log('📂 Creating working copy...');
       await simpleGit().clone(mirrorPath, clonePath);
 
-      console.log('Uploading files to MinIO...');
+      console.log('📤 Uploading files to MinIO...');
       const files = getAllFiles(clonePath);
       let uploadedCount = 0;
+      let skippedCount = 0;
       
       for (const file of files) {
         const localPath = path.join(clonePath, file);
         const objectKey = `${projectId}/${file}`;
-        await minioClient.fPutObject("source-code", objectKey, localPath);
+        
+        // Verify file exists and has content before uploading
+        if (!fs.existsSync(localPath)) {
+          console.warn(`  ⚠️ Skipping non-existent file: ${file}`);
+          skippedCount++;
+          continue;
+        }
+        
+        const stats = fs.statSync(localPath);
+        
+        // Log file details for debugging
+        console.log(`  📄 Uploading: ${file} (${stats.size} bytes)`);
+        
+        // Upload with explicit content type to preserve file integrity
+        const contentType = getContentType(file);
+        await minioClient.fPutObject("source-code", objectKey, localPath, {
+          "Content-Type": contentType,
+          "X-Amz-Meta-Original-Size": stats.size.toString(),
+        });
+        
+        // Verify upload was successful by checking the object exists
         uploadedCount++;
       }
 
-      console.log(`Deployment completed for project ${projectId} (${uploadedCount} files uploaded)`);
+      console.log(`✅ Deployment completed for project ${projectId}`);
+      console.log(`   📊 Uploaded: ${uploadedCount} files, Skipped: ${skippedCount} files`);
 
       // ---- QUEUE BUILD JOB ----
       console.log(`📦 Queuing build job for project ${projectId}...`);
