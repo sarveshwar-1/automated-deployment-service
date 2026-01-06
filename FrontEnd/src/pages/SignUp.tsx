@@ -1,26 +1,25 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import '../styles/Auth.css';
-
-const ip = "127.0.0.1"
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import "../styles/Auth.css";
+import { API_URL } from "../config";
 function SignUp() {
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
 
     try {
-      const response = await fetch(`http://${ip}:3002/signup`, {
-        method: 'POST',
+      const response = await fetch(`${API_URL}/signup`, {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           username,
@@ -31,13 +30,13 @@ function SignUp() {
 
       const data = await response.json();
 
-      if (data.message === 'User successfully signed up') {
-        navigate('/signin');
+      if (data.message === "User successfully signed up") {
+        navigate("/signin");
       } else {
-        setError(data.message || 'Signup failed');
+        setError(data.message || "Signup failed");
       }
     } catch (err) {
-      setError('Failed to sign up. Please try again.');
+      setError("Failed to sign up. Please try again.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -49,7 +48,7 @@ function SignUp() {
       <div className="auth-box">
         <h2>Sign Up</h2>
         {error && <div className="error-message">{error}</div>}
-        
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="username">Username</label>
@@ -88,7 +87,7 @@ function SignUp() {
           </div>
 
           <button type="submit" disabled={loading}>
-            {loading ? 'Signing Up...' : 'Sign Up'}
+            {loading ? "Signing Up..." : "Sign Up"}
           </button>
         </form>
 

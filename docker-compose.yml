@@ -1,0 +1,225 @@
+version: '3.8'
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7
+    container_name: ads-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - ads-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for BullMQ job queues
+  redis:
+    image: redis:7-alpine
+    container_name: ads-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ads-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO Object Storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: ads-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"  # MinIO Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    networks:
+      - ads-network
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # MinIO bucket initialization
+  minio-init:
+    image: minio/mc:latest
+    container_name: ads-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/source-code --ignore-existing;
+      mc mb myminio/static-builds --ignore-existing;
+      mc anonymous set download myminio/static-builds;
+      echo 'Buckets created successfully';
+      exit 0;
+      "
+    networks:
+      - ads-network
+
+  # Upload Service - Express API (port 3000)
+  upload-service:
+    build:
+      context: ./upload-service
+      dockerfile: Dockerfile
+    container_name: ads-upload-service
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/automated-deployment
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_USE_SSL=false
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+    volumes:
+      - upload_temp:/tmp
+      - git_mirrors:/app/src/gitBare
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - ads-network
+    restart: unless-stopped
+
+  # Upload Service Worker - Processes deployment jobs
+  upload-worker:
+    build:
+      context: ./upload-service
+      dockerfile: Dockerfile
+    container_name: ads-upload-worker
+    command: ["node", "dist/worker.js"]
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/automated-deployment
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_USE_SSL=false
+    volumes:
+      - upload_temp:/tmp
+      - git_mirrors:/app/src/gitBare
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - ads-network
+    restart: unless-stopped
+
+  # Upload Service Daemon - Checks for new commits
+  upload-daemon:
+    build:
+      context: ./upload-service
+      dockerfile: Dockerfile
+    container_name: ads-upload-daemon
+    command: ["node", "dist/daemon.js"]
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/automated-deployment
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_USE_SSL=false
+    volumes:
+      - git_mirrors:/app/src/gitBare
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ads-network
+    restart: unless-stopped
+
+  # Build Service Worker - Builds projects and serves static files
+  build-service:
+    build:
+      context: ./build-service
+      dockerfile: Dockerfile
+    container_name: ads-build-service
+    ports:
+      - "3001:3001"  # Static file server
+    environment:
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_USE_SSL=false
+      - PORT=3001
+    volumes:
+      - build_temp:/tmp
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    networks:
+      - ads-network
+    restart: unless-stopped
+
+  # Frontend - React/Vite
+  frontend:
+    build:
+      context: ./FrontEnd
+      dockerfile: Dockerfile
+    container_name: ads-frontend
+    ports:
+      - "5173:80"
+    environment:
+      - VITE_API_URL=http://localhost:3000
+      - VITE_BUILD_SERVICE_URL=http://localhost:3001
+    depends_on:
+      - upload-service
+      - build-service
+    networks:
+      - ads-network
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+  redis_data:
+  minio_data:
+  upload_temp:
+  build_temp:
+  git_mirrors:
+
+networks:
+  ads-network:
+    driver: bridge

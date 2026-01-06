@@ -1,30 +1,29 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import '../styles/Auth.css';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import "../styles/Auth.css";
+import { API_URL } from "../config";
 
 interface SignInProps {
   setIsAuthenticated: (value: boolean) => void;
 }
 
-const ip = "127.0.0.1"
-
 function SignIn({ setIsAuthenticated }: SignInProps) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setLoading(true);
 
     try {
-      const response = await fetch(`http://${ip}:3002/signin`, {
-        method: 'POST',
+      const response = await fetch(`${API_URL}/signin`, {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           email,
@@ -35,14 +34,14 @@ function SignIn({ setIsAuthenticated }: SignInProps) {
       const data = await response.json();
 
       if (data.token) {
-        localStorage.setItem('token', data.token);
+        localStorage.setItem("token", data.token);
         setIsAuthenticated(true);
-        navigate('/deploy');
+        navigate("/deploy");
       } else {
-        setError(data.message || 'Sign in failed');
+        setError(data.message || "Sign in failed");
       }
     } catch (err) {
-      setError('Failed to sign in. Please try again.');
+      setError("Failed to sign in. Please try again.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -54,7 +53,7 @@ function SignIn({ setIsAuthenticated }: SignInProps) {
       <div className="auth-box">
         <h2>Sign In</h2>
         {error && <div className="error-message">{error}</div>}
-        
+
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="email">Email</label>
@@ -81,7 +80,7 @@ function SignIn({ setIsAuthenticated }: SignInProps) {
           </div>
 
           <button type="submit" disabled={loading}>
-            {loading ? 'Signing In...' : 'Sign In'}
+            {loading ? "Signing In..." : "Sign In"}
           </button>
         </form>
 

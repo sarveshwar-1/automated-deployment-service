@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken')
 
-export const JWT_SECRET = "ILoveKiaraAdvani"
+export const JWT_SECRET = process.env.JWT_SECRET || "ILoveKiaraAdvani"
 
 export function authMiddleware(req: any, res: any, next: any) {
   console.log("inside the auth middleware")

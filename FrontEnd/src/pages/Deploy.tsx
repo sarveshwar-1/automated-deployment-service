@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import '../styles/Deploy.css';
+import { useState } from "react";
+import "../styles/Deploy.css";
+import { API_URL } from "../config";
 
 interface DeployResponse {
   url: string;
@@ -9,35 +10,35 @@ interface DeployResponse {
   defaultBranch: string;
 }
 
-const ip = "127.0.0.1"
-
 function Deploy() {
-  const [repoUrl, setRepoUrl] = useState('');
+  const [repoUrl, setRepoUrl] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [projectDetails, setProjectDetails] = useState<DeployResponse | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [projectDetails, setProjectDetails] = useState<DeployResponse | null>(
+    null
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
+    setError("");
+    setSuccess("");
     setProjectDetails(null);
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       if (!token) {
-        setError('No authentication token found');
+        setError("No authentication token found");
         setLoading(false);
         return;
       }
 
-      const response = await fetch(`http://${ip}:3002/deploy`, {
-        method: 'POST',
+      const response = await fetch(`${API_URL}/deploy`, {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'token': `${token}`,
+          "Content-Type": "application/json",
+          token: `${token}`,
         },
         body: JSON.stringify({
           repoUrl,
@@ -47,14 +48,14 @@ function Deploy() {
       const data = await response.json();
 
       if (response.ok && data.projectId) {
-        setSuccess('Project deployed successfully!');
+        setSuccess("Project deployed successfully!");
         setProjectDetails(data);
-        setRepoUrl('');
+        setRepoUrl("");
       } else {
-        setError(data.error || 'Failed to deploy project');
+        setError(data.error || "Failed to deploy project");
       }
     } catch (err) {
-      setError('Failed to deploy. Please check the URL and try again.');
+      setError("Failed to deploy. Please check the URL and try again.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -65,7 +66,7 @@ function Deploy() {
     <div className="deploy-container">
       <div className="deploy-box">
         <h2>Deploy New Project</h2>
-        
+
         {error && <div className="error-message">{error}</div>}
         {success && <div className="success-message">{success}</div>}
 
@@ -85,7 +86,7 @@ function Deploy() {
           </div>
 
           <button type="submit" disabled={loading} className="deploy-btn">
-            {loading ? 'Deploying...' : 'Deploy'}
+            {loading ? "Deploying..." : "Deploy"}
           </button>
         </form>
 

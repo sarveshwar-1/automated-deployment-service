@@ -29,7 +29,9 @@ import Redis from "ioredis";
  */
 
 async function connectDB() {
-  await mongoose.connect('mongodb://localhost:27017');
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/automated-deployment';
+  await mongoose.connect(mongoUri);
+  console.log('📦 Connected to MongoDB');
 }
 connectDB();
 
@@ -41,8 +43,8 @@ app.use(express.json());
 
 // Redis connection for queue
 const redis = new Redis({
-  host: 'localhost',
-  port: 6379,
+  host: process.env.REDIS_HOST || 'localhost',
+  port: parseInt(process.env.REDIS_PORT || '6379'),
   maxRetriesPerRequest: null,
 });
 

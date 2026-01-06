@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import "../styles/ViewProjects.css";
+import { API_URL, BUILD_SERVICE_URL } from "../config";
 
 interface Project {
   _id: string;
@@ -9,11 +10,6 @@ interface Project {
   commitSha: string;
   userId: string;
 }
-
-const API_HOST = "127.0.0.1";
-const API_PORT = 3002;
-const BUILD_SERVICE_HOST = "127.0.0.1";
-const BUILD_SERVICE_PORT = 3003;
 function ViewProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,15 +32,12 @@ function ViewProjects() {
         return;
       }
 
-      const response = await fetch(
-        `http://${API_HOST}:${API_PORT}/viewProjects`,
-        {
-          method: "GET",
-          headers: {
-            token: `${token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_URL}/viewProjects`, {
+        method: "GET",
+        headers: {
+          token: `${token}`,
+        },
+      });
 
       const data = await response.json();
 
@@ -75,19 +68,16 @@ function ViewProjects() {
         return;
       }
 
-      const response = await fetch(
-        `http://${API_HOST}:${API_PORT}/deleteProject`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            token: `${token}`,
-          },
-          body: JSON.stringify({
-            projectId,
-          }),
-        }
-      );
+      const response = await fetch(`${API_URL}/deleteProject`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          token: `${token}`,
+        },
+        body: JSON.stringify({
+          projectId,
+        }),
+      });
 
       const data = await response.json();
 
@@ -161,19 +151,19 @@ function ViewProjects() {
                   <div className="info-row">
                     <label>Preview URL</label>
                     <a
-                      href={`http://${BUILD_SERVICE_HOST}:${BUILD_SERVICE_PORT}/${project.projectId}/`}
+                      href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="preview-link"
                     >
-                      {`http://${BUILD_SERVICE_HOST}:${BUILD_SERVICE_PORT}/${project.projectId}/`}
+                      {`${BUILD_SERVICE_URL}/${project.projectId}/`}
                     </a>
                   </div>
                 </div>
 
                 <div className="card-footer">
                   <a
-                    href={`http://${BUILD_SERVICE_HOST}:${BUILD_SERVICE_PORT}/${project.projectId}/`}
+                    href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="preview-btn"
