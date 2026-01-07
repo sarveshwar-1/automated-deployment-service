@@ -91,7 +91,7 @@ services:
       - MINIO_ACCESS_KEY=minioadmin
       - MINIO_SECRET_KEY=minioadmin
       - MINIO_USE_SSL=false
-      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - JWT_SECRET=ILoveKiaraAdvani
     volumes:
       - upload_temp:/tmp
       - git_mirrors:/app/src/gitBare

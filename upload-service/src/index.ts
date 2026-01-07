@@ -246,6 +246,8 @@ app.post('/deploy', authMiddleware, async (req: any, res: any)=>{
 })
 
 
-app.listen(3002, () => {
-  console.log("🚀 Upload Service running on http://localhost:3002");
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`🚀 Upload Service running on http://localhost:${PORT}`);
 });
