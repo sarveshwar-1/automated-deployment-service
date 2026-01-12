@@ -199,12 +199,12 @@ services:
     build:
       context: ./FrontEnd
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:3000
+        - VITE_BUILD_SERVICE_URL=http://localhost:3001
     container_name: ads-frontend
     ports:
       - "5173:80"
-    environment:
-      - VITE_API_URL=http://localhost:3000
-      - VITE_BUILD_SERVICE_URL=http://localhost:3001
     depends_on:
       - upload-service
       - build-service

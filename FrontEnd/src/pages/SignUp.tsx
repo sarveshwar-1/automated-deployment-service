@@ -30,10 +30,11 @@ function SignUp() {
 
       const data = await response.json();
 
-      if (data.message === "User successfully signed up") {
+      if (response.ok && data.message === "User successfully signed up") {
         navigate("/signin");
       } else {
-        setError(data.message || "Signup failed");
+        // Handle error response - backend returns { error: "..." }
+        setError(data.error || data.message || "Signup failed");
       }
     } catch (err) {
       setError("Failed to sign up. Please try again.");
@@ -83,7 +84,11 @@ function SignUp() {
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="Enter your password"
+              minLength={8}
             />
+            <small className="password-hint">
+              Password must be 8+ characters with uppercase, lowercase, number, and special character.
+            </small>
           </div>
 
           <button type="submit" disabled={loading}>

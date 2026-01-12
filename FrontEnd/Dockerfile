@@ -6,6 +6,14 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Build arguments for Vite environment variables (must be set at build time)
+ARG VITE_API_URL=http://localhost:3000
+ARG VITE_BUILD_SERVICE_URL=http://localhost:3001
+
+# Set as environment variables for the build process
+ENV VITE_API_URL=$VITE_API_URL
+ENV VITE_BUILD_SERVICE_URL=$VITE_BUILD_SERVICE_URL
+
 # Install pnpm
 RUN npm install -g pnpm
 

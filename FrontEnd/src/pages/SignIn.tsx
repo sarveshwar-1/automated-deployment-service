@@ -33,12 +33,13 @@ function SignIn({ setIsAuthenticated }: SignInProps) {
 
       const data = await response.json();
 
-      if (data.token) {
-        localStorage.setItem("token", data.token);
+      if (response.ok && data.accessToken) {
+        localStorage.setItem("token", data.accessToken);
+        localStorage.setItem("refreshToken", data.refreshToken);
         setIsAuthenticated(true);
         navigate("/deploy");
       } else {
-        setError(data.message || "Sign in failed");
+        setError(data.error || data.message || "Sign in failed");
       }
     } catch (err) {
       setError("Failed to sign in. Please try again.");

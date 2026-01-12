@@ -101,3 +101,11 @@
 .auth-link a:hover {
   text-decoration: underline;
 }
+
+.password-hint {
+  display: block;
+  margin-top: 6px;
+  color: #666;
+  font-size: 12px;
+  line-height: 1.4;
+}
