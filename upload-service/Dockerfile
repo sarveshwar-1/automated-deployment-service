@@ -1,9 +1,9 @@
-# Upload Service Dockerfile - Security Hardened
+# Upload Service Dockerfile - Optimized for Docker on Windows
 # Course Relevance: CO3 - Memory protection, Trusted Systems
 
 FROM node:20-alpine
 
-# Security: Don't run as root - create app user
+# Security: Create app user first
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
@@ -16,22 +16,22 @@ WORKDIR /app
 # Install pnpm
 RUN npm install -g pnpm
 
-# Copy package files first (for better layer caching)
-COPY package.json pnpm-lock.yaml ./
+# Copy package files with proper ownership
+COPY --chown=appuser:appgroup package.json pnpm-lock.yaml ./
 
-# Install dependencies
+# Install dependencies (as root to avoid permission issues, then we'll switch)
 RUN pnpm install --frozen-lockfile
 
-# Copy TypeScript config and source code
-COPY tsconfig.json ./
-COPY src ./src
+# Copy TypeScript config and source code with proper ownership
+COPY --chown=appuser:appgroup tsconfig.json ./
+COPY --chown=appuser:appgroup src ./src
 
 # Build TypeScript
 RUN pnpm build
 
-# Create required directories with proper ownership
+# Create required directories
 RUN mkdir -p /app/src/gitBare /app/keys && \
-    chown -R appuser:appgroup /app
+    chown -R appuser:appgroup /app/src/gitBare /app/keys /app/dist
 
 # Create entrypoint script
 RUN echo '#!/bin/sh' > /app/entrypoint.sh && \
@@ -48,9 +48,6 @@ USER appuser
 
 # Expose port 3000
 EXPOSE 3000
-
-# Security: Set read-only filesystem where possible (in docker-compose)
-# Security: Drop all capabilities (in docker-compose)
 
 # Default command
 CMD ["/app/entrypoint.sh"]

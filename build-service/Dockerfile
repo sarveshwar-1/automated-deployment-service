@@ -1,13 +1,13 @@
-# Build Service Dockerfile - Security Hardened
+# Build Service Dockerfile - Optimized for Docker on Windows
 # Course Relevance: CO3 - Memory protection, Trusted Systems
 
 FROM node:20-alpine
 
-# Security: Don't run as root - create app user
+# Security: Create app user
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
-# Install build tools that might be needed for project builds
+# Install build tools
 RUN apk add --no-cache git python3 make g++
 
 # Set working directory
@@ -17,20 +17,20 @@ WORKDIR /app
 RUN npm install -g pnpm
 
 # Copy package files
-COPY package.json pnpm-lock.yaml ./
+COPY --chown=appuser:appgroup package.json pnpm-lock.yaml ./
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
 # Copy TypeScript config and source code
-COPY tsconfig.json ./
-COPY src ./src
+COPY --chown=appuser:appgroup tsconfig.json ./
+COPY --chown=appuser:appgroup src ./src
 
 # Build TypeScript
 RUN pnpm build
 
-# Set proper ownership
-RUN chown -R appuser:appgroup /app
+# Set ownership only on specific directories (not node_modules)
+RUN chown -R appuser:appgroup /app/dist
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
