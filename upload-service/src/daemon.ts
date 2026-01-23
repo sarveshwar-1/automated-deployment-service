@@ -9,7 +9,7 @@ import Redis from 'ioredis';
 // Redis connection
 const redis = new Redis({
   host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
+  port: parseInt(process.env.REDIS_PORT || '6380'),
   maxRetriesPerRequest: null,
 });
 
@@ -25,7 +25,7 @@ deploymentQueue.on('error', (err) => {
 });
 
 async function connectDB() {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/automated-deployment';
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27018/automated-deployment';
   await mongoose.connect(mongoUri);
   console.log('📦 Connected to MongoDB');
 }

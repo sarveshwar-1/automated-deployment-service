@@ -45,7 +45,7 @@ import { checkLockout, recordFailedAttempt, resetFailedAttempts } from "./securi
 
 // MongoDB connection
 async function connectDB() {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/automated-deployment';
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27018/automated-deployment';
   await mongoose.connect(mongoUri);
   console.log('📦 Connected to MongoDB');
 }
@@ -72,7 +72,7 @@ app.use(helmet({
 // Hardened CORS - only allow specific origins
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
-  'http://localhost:3000'
+  'http://localhost:3002'
 ];
 
 app.use(cors({
@@ -98,7 +98,7 @@ app.use(apiLimiter);
 // Redis connection for queue
 const redis = new Redis({
   host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6379'),
+  port: parseInt(process.env.REDIS_PORT || '6380'),
   maxRetriesPerRequest: null,
 });
 
