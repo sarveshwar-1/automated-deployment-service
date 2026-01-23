@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # MongoDB Database
@@ -6,7 +6,7 @@ services:
     image: mongo:7
     container_name: ads-mongodb
     ports:
-      - "27017:27017"
+      - "27018:27017"
     volumes:
       - mongodb_data:/data/db
     networks:
@@ -22,7 +22,7 @@ services:
     image: redis:7-alpine
     container_name: ads-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -38,8 +38,8 @@ services:
     image: minio/minio:latest
     container_name: ads-minio
     ports:
-      - "9000:9000"
-      - "9001:9001"  # MinIO Console
+      - "9010:9000"
+      - "9011:9001" # MinIO Console
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -73,14 +73,14 @@ services:
     networks:
       - ads-network
 
-  # Upload Service - Express API (port 3000)
+  # Upload Service - Express API (port 3002)
   upload-service:
     build:
       context: ./upload-service
       dockerfile: Dockerfile
     container_name: ads-upload-service
     ports:
-      - "3000:3000"
+      - "3002:3000"
     environment:
       - NODE_ENV=production
       - MONGODB_URI=mongodb://mongodb:27017/automated-deployment
@@ -172,7 +172,7 @@ services:
       dockerfile: Dockerfile
     container_name: ads-build-service
     ports:
-      - "3001:3001"  # Static file server
+      - "3001:3001" # Static file server
     environment:
       - NODE_ENV=production
       - REDIS_HOST=redis
@@ -200,7 +200,7 @@ services:
       context: ./FrontEnd
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=http://localhost:3000
+        - VITE_API_URL=http://localhost:3002
         - VITE_BUILD_SERVICE_URL=http://localhost:3001
     container_name: ads-frontend
     ports:
