@@ -22,6 +22,7 @@ import {
 } from "./auth";
 import { UserModel, ProjectModel, RefreshTokenModel } from "./db";
 import { requirePermission, requireRole, canAccessProject } from "./middleware/rbac";
+//all the rate limiters are disabled now for testing purposes.
 import { apiLimiter, authLimiter, signupLimiter, deployLimiter, refreshLimiter } from "./middleware/rateLimiter";
 import { 
   validateRepoUrl, 
@@ -93,7 +94,7 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 
 // Apply general rate limiting to all routes
-app.use(apiLimiter);
+//app.use(apiLimiter);
 
 // Redis connection for queue
 const redis = new Redis({
@@ -119,7 +120,7 @@ app.get('/health', (req: Request, res: Response) => {
  * User Signup with validation
  * Rate limited: 10 signups per hour per IP
  */
-app.post('/signup', signupLimiter, async (req: Request, res: Response) => {
+app.post('/signup', async (req: Request, res: Response) => {
   console.log('📝 Signup request received');
   
   const { username, password, email } = req.body;
@@ -171,7 +172,7 @@ app.post('/signup', signupLimiter, async (req: Request, res: Response) => {
  * User Signin with account lockout protection
  * Rate limited: 5 attempts per 15 minutes per IP
  */
-app.post('/signin', authLimiter, async (req: Request, res: Response) => {
+app.post('/signin', async (req: Request, res: Response) => {
   console.log('🔑 Signin request received');
   
   const { email, password } = req.body;
@@ -246,7 +247,7 @@ app.post('/signin', authLimiter, async (req: Request, res: Response) => {
  * Token Refresh - Exchange refresh token for new access token
  * Similar to Kerberos TGS (Ticket Granting Service)
  */
-app.post('/refresh', refreshLimiter, async (req: Request, res: Response) => {
+app.post('/refresh', async (req: Request, res: Response) => {
   console.log('🔄 Token refresh request');
   
   const { refreshToken } = req.body;
@@ -391,6 +392,7 @@ app.delete('/deleteProject', authMiddleware, async (req: AuthRequest, res: Respo
 
     await deleteFolder("source-code", `${sanitizedProjectId}/`);
     await deleteFolder("static-builds", `${sanitizedProjectId}/`);
+    await deleteFolder("build-logs", `${sanitizedProjectId}/`);
     await ProjectModel.deleteOne({ projectId: sanitizedProjectId });
     
     res.json({ message: "Project deleted successfully" });
@@ -401,10 +403,127 @@ app.delete('/deleteProject', authMiddleware, async (req: AuthRequest, res: Respo
 });
 
 /**
+ * Get build logs list for a project
+ * Returns list of all build log files with metadata
+ */
+app.get('/projects/:projectId/logs', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params;
+    const sanitizedProjectId = sanitizeProjectId(projectId);
+
+    // Verify project exists and user has access
+    const project = await ProjectModel.findOne({ projectId: sanitizedProjectId });
+    if (!project) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
+    if (!canAccessProject(req, project.userId.toString())) {
+      res.status(403).json({ error: "Forbidden: You cannot access this project's logs" });
+      return;
+    }
+
+    // List all log files from MinIO
+    const logs: Array<{
+      fileName: string;
+      timestamp: string;
+      status: 'success' | 'failed';
+      size: number;
+    }> = [];
+
+    const objectsStream = minioClient.listObjects('build-logs', `${sanitizedProjectId}/`, false);
+    
+    for await (const obj of objectsStream) {
+      if (obj.name) {
+        const fileName = obj.name.split('/').pop() || '';
+        // Parse filename format: 2026-01-24T12-30-45-123Z-success.log
+        const match = fileName.match(/^(.+)-(success|failed)\.log$/);
+        
+        if (match) {
+          const timestamp = match[1].replace(/-/g, ':').replace(/T/g, 'T').replace(/Z/g, '.000Z');
+          const status = match[2] as 'success' | 'failed';
+          
+          logs.push({
+            fileName,
+            timestamp,
+            status,
+            size: obj.size || 0,
+          });
+        }
+      }
+    }
+
+    // Sort by timestamp descending (newest first)
+    logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    res.json({ logs });
+  } catch (error) {
+    console.error('Get logs error:', error);
+    res.status(500).json({ error: "Failed to fetch build logs" });
+  }
+});
+
+/**
+ * Get specific build log content
+ * Returns the full log file content
+ */
+app.get('/projects/:projectId/logs/:fileName', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, fileName } = req.params;
+    const sanitizedProjectId = sanitizeProjectId(projectId);
+
+    // Verify project exists and user has access
+    const project = await ProjectModel.findOne({ projectId: sanitizedProjectId });
+    if (!project) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
+    if (!canAccessProject(req, project.userId.toString())) {
+      res.status(403).json({ error: "Forbidden: You cannot access this project's logs" });
+      return;
+    }
+
+    // Validate fileName to prevent path traversal
+    if (fileName.includes('..') || fileName.includes('/')) {
+      res.status(400).json({ error: "Invalid file name" });
+      return;
+    }
+
+    const objectKey = `${sanitizedProjectId}/${fileName}`;
+
+    // Stream log content from MinIO
+    const stream = await minioClient.getObject('build-logs', objectKey);
+    
+    let logContent = '';
+    stream.on('data', (chunk) => {
+      logContent += chunk.toString();
+    });
+
+    stream.on('end', () => {
+      res.json({ content: logContent });
+    });
+
+    stream.on('error', (err) => {
+      console.error('Stream error:', err);
+      res.status(404).json({ error: "Log file not found" });
+    });
+
+  } catch (error: any) {
+    console.error('Get log content error:', error);
+    if (error.code === 'NoSuchKey') {
+      res.status(404).json({ error: "Log file not found" });
+    } else {
+      res.status(500).json({ error: "Failed to fetch log content" });
+    }
+  }
+});
+
+/**
  * Deploy a new project
  * Requires developer or admin role
  */
-app.post('/deploy', authMiddleware, requirePermission('project:create'), deployLimiter, async (req: AuthRequest, res: Response) => {
+app.post('/deploy', authMiddleware, requirePermission('project:create'), async (req: AuthRequest, res: Response) => {
   const { repoUrl } = req.body;
   
   // Validate repository URL
@@ -451,6 +570,8 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), deployL
       projectId: id,
       commitSha: commitSha,
       defaultBranch: defaultBranch,
+      buildStatus: 'building', // Set initial status as building
+      lastBuildAt: new Date(),
     });
 
     res.status(202).json({
@@ -458,6 +579,7 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), deployL
       projectId: id,
       commitSha: commitSha,
       defaultBranch: defaultBranch,
+      buildStatus: 'building', // Return status to frontend
     });
   } catch (error: any) {
     console.error('Deploy error:', error);

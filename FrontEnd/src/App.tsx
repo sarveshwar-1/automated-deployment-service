@@ -4,6 +4,7 @@ import SignUp from './pages/SignUp';
 import SignIn from './pages/SignIn';
 import Deploy from './pages/Deploy';
 import ViewProjects from './pages/ViewProjects';
+import Dashboard from './pages/Dashboard';
 import './App.css';
 
 function App() {
@@ -58,6 +59,10 @@ function App() {
           <Route 
             path="/projects" 
             element={isAuthenticated ? <ViewProjects /> : <Navigate to="/signin" />} 
+          />
+          <Route 
+            path="/dashboard/:projectId" 
+            element={isAuthenticated ? <Dashboard /> : <Navigate to="/signin" />} 
           />
           <Route 
             path="/" 

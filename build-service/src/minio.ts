@@ -11,4 +11,5 @@ export const minioClient = new Client({
 export const BUCKETS = {
   SOURCE_CODE: "source-code",
   STATIC_BUILDS: "static-builds",
+  BUILD_LOGS: "build-logs",
 };

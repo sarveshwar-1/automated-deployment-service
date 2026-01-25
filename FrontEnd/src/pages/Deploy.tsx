@@ -8,6 +8,7 @@ interface DeployResponse {
   projectId: string;
   commitSha: string;
   defaultBranch: string;
+  buildStatus?: string;
 }
 
 function Deploy() {
@@ -48,7 +49,7 @@ function Deploy() {
       const data = await response.json();
 
       if (response.ok && data.projectId) {
-        setSuccess("Project deployed successfully!");
+        setSuccess("Build queued successfully! Your project is being built...");
         setProjectDetails(data);
         setRepoUrl("");
       } else {
@@ -92,24 +93,9 @@ function Deploy() {
 
         {projectDetails && (
           <div className="project-details">
-            <h3>Deployment Successful!</h3>
-            <div className="details-grid">
-              <div className="detail-item">
-                <label>Project ID</label>
-                <code>{projectDetails.projectId}</code>
-              </div>
-              <div className="detail-item">
-                <label>Repository URL</label>
-                <code>{projectDetails.url}</code>
-              </div>
-              <div className="detail-item">
-                <label>Default Branch</label>
-                <code>{projectDetails.defaultBranch}</code>
-              </div>
-              <div className="detail-item">
-                <label>Commit SHA</label>
-                <code>{projectDetails.commitSha.substring(0, 7)}</code>
-              </div>
+            <h3>Build Started!</h3>
+            <div className="build-status-info">
+              <p>Your project is being built. You can view the progress in the Projects page.</p>
             </div>
           </div>
         )}

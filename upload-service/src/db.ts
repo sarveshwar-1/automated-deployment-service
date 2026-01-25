@@ -34,6 +34,14 @@ const projectSchema = new Schema({
   userId: ObjectId,
   commitSha: String,
   defaultBranch: String,
+  // Build status tracking
+  buildStatus: { 
+    type: String, 
+    enum: ['pending', 'building', 'success', 'failed'], 
+    default: 'pending' 
+  },
+  buildError: { type: String, default: null },
+  lastBuildAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

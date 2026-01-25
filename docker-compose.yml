@@ -175,6 +175,7 @@ services:
       - "3001:3001" # Static file server
     environment:
       - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/automated-deployment
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - MINIO_ENDPOINT=minio
@@ -186,6 +187,8 @@ services:
     volumes:
       - build_temp:/tmp
     depends_on:
+      mongodb:
+        condition: service_healthy
       redis:
         condition: service_healthy
       minio-init:
