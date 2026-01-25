@@ -7,14 +7,14 @@ FROM node:20-alpine
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
-# Install build tools
+# Install build tools and common dependencies
 RUN apk add --no-cache git python3 make g++
 
 # Set working directory
 WORKDIR /app
 
-# Install pnpm globally
-RUN npm install -g pnpm
+# Install pnpm and common build tools globally
+RUN npm install -g pnpm typescript vite @vitejs/plugin-react
 
 # Copy package files
 COPY --chown=appuser:appgroup package.json pnpm-lock.yaml ./

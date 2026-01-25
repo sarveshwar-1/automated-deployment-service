@@ -7,7 +7,7 @@
  * Or:  npx ts-node test-security.ts
  */
 
-const API_URL = process.env.API_URL || 'http://localhost:3002';
+const API_URL = process.env.API_URL || 'http://172.17.9.74:3002';
 
 // Colors for terminal output
 const colors = {
@@ -61,7 +61,7 @@ async function makeRequest(url, options = {}) {
         ...options.headers
       }
     });
-    
+
     const data = await response.json().catch(() => ({}));
     return { status: response.status, ok: response.ok, data, headers: response.headers };
   } catch (error) {
@@ -75,7 +75,7 @@ async function makeRequest(url, options = {}) {
 
 async function testHealthCheck() {
   log.test('Health Check');
-  
+
   const res = await makeRequest(`${API_URL}/health`);
   if (res.ok && res.data.status === 'healthy') {
     testResult(true, 'API is healthy');
@@ -89,10 +89,10 @@ async function testHealthCheck() {
 
 async function testCryptographicTechniques() {
   log.test('CO1: Cryptographic Techniques - RS256 JWT');
-  
+
   const testEmail = `test${Math.floor(Math.random() * 999999)}@example.com`;
   const strongPassword = 'Test@123!Secure';
-  
+
   // Test weak password rejection
   log.info('Testing password validation...');
   const weakRes = await makeRequest(`${API_URL}/signup`, {
@@ -103,7 +103,7 @@ async function testCryptographicTechniques() {
       password: 'weak'
     })
   });
-  
+
   if (weakRes.status === 400) {
     testResult(true, 'Weak password rejected (Password Security)');
   } else if (weakRes.status === 429) {
@@ -112,9 +112,9 @@ async function testCryptographicTechniques() {
   } else {
     testResult(false, 'Weak password rejected');
   }
-  
+
   await sleep(1000);
-  
+
   // Test valid signup
   log.info('Testing signup with strong password...');
   const signupRes = await makeRequest(`${API_URL}/signup`, {
@@ -125,7 +125,7 @@ async function testCryptographicTechniques() {
       password: strongPassword
     })
   });
-  
+
   if (signupRes.ok) {
     testResult(signupRes.data.message === 'User successfully signed up', 'Signup successful');
   } else if (signupRes.status === 429) {
@@ -134,9 +134,9 @@ async function testCryptographicTechniques() {
   } else {
     testResult(false, 'Signup successful');
   }
-  
+
   await sleep(1000);
-  
+
   // Test signin
   log.info('Testing signin with RS256 JWT...');
   const signinRes = await makeRequest(`${API_URL}/signin`, {
@@ -146,11 +146,11 @@ async function testCryptographicTechniques() {
       password: strongPassword
     })
   });
-  
+
   if (signinRes.ok && signinRes.data.accessToken) {
     accessToken = signinRes.data.accessToken;
     refreshToken = signinRes.data.refreshToken;
-    
+
     testResult(true, 'Access token received (RS256 signed)');
     testResult(!!signinRes.data.refreshToken, 'Refresh token received');
     testResult(signinRes.data.expiresIn === 900, 'Token expires in 15 minutes');
@@ -165,18 +165,18 @@ async function testCryptographicTechniques() {
 
 async function testTokenRefresh() {
   log.test('CO2: Token Refresh (Kerberos-like)');
-  
+
   if (!refreshToken) {
     log.warn('Skipping token refresh test (no refresh token)');
     return;
   }
-  
+
   log.info('Testing token refresh...');
   const res = await makeRequest(`${API_URL}/refresh`, {
     method: 'POST',
     body: JSON.stringify({ refreshToken })
   });
-  
+
   if (res.ok && res.data.accessToken) {
     testResult(true, 'New access token received via refresh');
     accessToken = res.data.accessToken;
@@ -188,36 +188,36 @@ async function testTokenRefresh() {
 
 async function testRBAC() {
   log.test('CO2: RBAC - Role-Based Access Control');
-  
+
   if (!accessToken) {
     log.warn('Skipping RBAC tests (no access token)');
     return;
   }
-  
+
   // Test admin endpoint with developer token
   log.info('Testing admin endpoint with developer token...');
   const adminRes = await makeRequest(`${API_URL}/admin/users`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` }
   });
-  
+
   testResult(adminRes.status === 403, 'Admin endpoint blocked for developer role');
-  
+
   // Test authenticated endpoint
   log.info('Testing project listing with valid token...');
   const projectsRes = await makeRequest(`${API_URL}/viewProjects`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${accessToken}` }
   });
-  
+
   testResult(projectsRes.ok, 'Authenticated endpoint accessible');
 }
 
 async function testBruteForceProtection() {
   log.test('CO2: Account Lockout & Rate Limiting');
-  
+
   const lockoutEmail = `lockout${Math.floor(Math.random() * 999999)}@test.com`;
-  
+
   // Create user for lockout test
   await makeRequest(`${API_URL}/signup`, {
     method: 'POST',
@@ -227,13 +227,13 @@ async function testBruteForceProtection() {
       password: 'Test@123!Secure'
     })
   });
-  
+
   await sleep(500);
-  
+
   log.info('Testing brute-force protection (lockout OR rate limit)...');
   let protectionTriggered = false;
   let protectionType = '';
-  
+
   for (let i = 1; i <= 8; i++) {
     const res = await makeRequest(`${API_URL}/signin`, {
       method: 'POST',
@@ -242,7 +242,7 @@ async function testBruteForceProtection() {
         password: `wrongpassword${i}`
       })
     });
-    
+
     if (res.status === 423) {
       protectionTriggered = true;
       protectionType = 'Account Lockout';
@@ -254,18 +254,18 @@ async function testBruteForceProtection() {
       break;
     }
   }
-  
+
   testResult(protectionTriggered, `Brute-force protection active (${protectionType || 'Not triggered'})`);
 }
 
 async function testInputValidation() {
   log.test('CO3: Input Validation');
-  
+
   if (!accessToken) {
     log.warn('Skipping input validation tests (no access token)');
     return;
   }
-  
+
   // Test malicious URL rejection
   log.info('Testing malicious URL rejection...');
   const badUrlRes = await makeRequest(`${API_URL}/deploy`, {
@@ -273,7 +273,7 @@ async function testInputValidation() {
     headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ repoUrl: 'http://malicious-site.com/hack' })
   });
-  
+
   if (badUrlRes.status === 400) {
     testResult(true, 'Non-GitHub URL rejected');
   } else if (badUrlRes.status === 429) {
@@ -282,7 +282,7 @@ async function testInputValidation() {
   } else {
     testResult(false, 'Non-GitHub URL rejected');
   }
-  
+
   // Test SSRF prevention
   log.info('Testing SSRF prevention...');
   const ssrfRes = await makeRequest(`${API_URL}/deploy`, {
@@ -290,7 +290,7 @@ async function testInputValidation() {
     headers: { Authorization: `Bearer ${accessToken}` },
     body: JSON.stringify({ repoUrl: 'https://github.com/localhost/repo.git' })
   });
-  
+
   if (ssrfRes.status === 400) {
     testResult(true, 'SSRF attempt blocked');
   } else if (ssrfRes.status === 429) {
@@ -309,10 +309,10 @@ async function testRateLimiting() {
 
 async function testSecurityHeaders() {
   log.test('CO4: Security Headers');
-  
+
   log.info('Checking API security headers (Helmet)...');
   const res = await makeRequest(`${API_URL}/health`);
-  
+
   // Helmet adds various security headers
   testResult(true, 'Security headers configured (Helmet middleware active)');
 }
@@ -331,7 +331,7 @@ function printSummary() {
   console.log(`${colors.green}Passed: ${passCount}${colors.reset}`);
   console.log(`${colors.red}Failed: ${failCount}${colors.reset}`);
   console.log(`Total:  ${passCount + failCount}`);
-  
+
   if (failCount === 0) {
     console.log(`\n${colors.green}✅ All security features working correctly!${colors.reset}`);
   } else if (failCount <= 2) {
@@ -340,13 +340,13 @@ function printSummary() {
   } else {
     console.log(`\n${colors.red}❌ Some tests failed. Check the output above.${colors.reset}`);
   }
-  
+
   console.log(`\n${colors.cyan}Course Outcome Coverage:${colors.reset}`);
   console.log('  CO1: Cryptographic Techniques (RS256 JWT, Signatures)');
   console.log('  CO2: Auth & Access Control (Token Refresh, RBAC, Lockout)');
   console.log('  CO3: Threat Prevention (Input Validation, Rate Limiting)');
   console.log('  CO4: Network Security (Headers, CORS, TLS config)');
-  
+
   console.log(`\n${colors.gray}Note: If rate limited, wait 15 min or restart: docker-compose down -v && docker-compose up${colors.reset}`);
 }
 
@@ -357,13 +357,13 @@ function printSummary() {
 async function main() {
   console.log(`${colors.bold}Security Features Test Script${colors.reset}`);
   console.log(`Testing API at: ${API_URL}\n`);
-  
+
   // Health check first
   const healthy = await testHealthCheck();
   if (!healthy) {
     process.exit(1);
   }
-  
+
   // Run all tests
   await testCryptographicTechniques();
   await testTokenRefresh();
@@ -373,10 +373,10 @@ async function main() {
   await testRateLimiting();
   await testSecurityHeaders();
   await testCORS();
-  
+
   // Print summary
   printSummary();
-  
+
   // Exit with appropriate code
   process.exit(failCount > 0 ? 1 : 0);
 }

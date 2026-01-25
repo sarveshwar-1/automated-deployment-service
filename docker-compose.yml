@@ -73,6 +73,50 @@ services:
     networks:
       - ads-network
 
+  # Kafka Message Broker
+  kafka:
+    image: apache/kafka:latest
+    container_name: ads-kafka
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      - KAFKA_NODE_ID=0
+      - KAFKA_PROCESS_ROLES=controller,broker
+      - KAFKA_LISTENERS=INTERNAL://:29092,REMOTE://:9094,CONTROLLER://:9093
+      - KAFKA_ADVERTISED_LISTENERS=INTERNAL://kafka:29092,REMOTE://172.17.9.74:9094
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=INTERNAL:PLAINTEXT,REMOTE:PLAINTEXT,CONTROLLER:PLAINTEXT
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_INTER_BROKER_LISTENER_NAME=INTERNAL
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - ads-network
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:29092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # Kafka UI for monitoring
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: ads-kafka-ui
+    ports:
+      - "8090:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local-cluster
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:29092
+    depends_on:
+      - kafka
+    networks:
+      - ads-network
+    restart: unless-stopped
+
   # Upload Service - Express API (port 3002)
   upload-service:
     build:
@@ -183,6 +227,7 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - MINIO_USE_SSL=false
       - PORT=3001
+      - KAFKA_BROKER=kafka:29092
     volumes:
       - build_temp:/tmp
     depends_on:
@@ -190,6 +235,8 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
     networks:
       - ads-network
     restart: unless-stopped
@@ -200,8 +247,8 @@ services:
       context: ./FrontEnd
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=http://localhost:3002
-        - VITE_BUILD_SERVICE_URL=http://localhost:3001
+        - VITE_API_URL=http://${SERVER_IP:-172.17.9.74}:${UPLOAD_SERVICE_PORT:-3002}
+        - VITE_BUILD_SERVICE_URL=http://${SERVER_IP:-172.17.9.74}:${BUILD_SERVICE_PORT:-3001}
     container_name: ads-frontend
     ports:
       - "5173:80"
@@ -219,6 +266,7 @@ volumes:
   upload_temp:
   build_temp:
   git_mirrors:
+  kafka_data:
 
 networks:
   ads-network:

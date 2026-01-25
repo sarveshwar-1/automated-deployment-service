@@ -12,23 +12,23 @@ import { Queue } from "bullmq";
 import Redis from "ioredis";
 
 // Security imports
-import { 
-  authMiddleware, 
-  signAccessToken, 
-  signRefreshToken, 
+import {
+  authMiddleware,
+  signAccessToken,
+  signRefreshToken,
   verifyToken,
   AuthRequest,
-  REFRESH_TOKEN_EXPIRY 
+  REFRESH_TOKEN_EXPIRY
 } from "./auth";
 import { UserModel, ProjectModel, RefreshTokenModel } from "./db";
 import { requirePermission, requireRole, canAccessProject } from "./middleware/rbac";
 import { apiLimiter, authLimiter, signupLimiter, deployLimiter, refreshLimiter } from "./middleware/rateLimiter";
-import { 
-  validateRepoUrl, 
-  validateEmail, 
-  validateUsername, 
+import {
+  validateRepoUrl,
+  validateEmail,
+  validateUsername,
   validatePassword,
-  sanitizeProjectId 
+  sanitizeProjectId
 } from "./security/inputValidator";
 import { checkLockout, recordFailedAttempt, resetFailedAttempts } from "./security/accountLockout";
 
@@ -45,7 +45,7 @@ import { checkLockout, recordFailedAttempt, resetFailedAttempts } from "./securi
 
 // MongoDB connection
 async function connectDB() {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27018/automated-deployment';
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://172.17.9.74:27018/automated-deployment';
   await mongoose.connect(mongoUri);
   console.log('📦 Connected to MongoDB');
 }
@@ -71,8 +71,8 @@ app.use(helmet({
 
 // Hardened CORS - only allow specific origins
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
-  'http://localhost:3002'
+  process.env.FRONTEND_URL || 'http://172.17.9.74:5173',
+  'http://172.17.9.74:3002'
 ];
 
 app.use(cors({
@@ -97,7 +97,7 @@ app.use(apiLimiter);
 
 // Redis connection for queue
 const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
+  host: process.env.REDIS_HOST || '172.17.9.74',
   port: parseInt(process.env.REDIS_PORT || '6380'),
   maxRetriesPerRequest: null,
 });
@@ -121,22 +121,22 @@ app.get('/health', (req: Request, res: Response) => {
  */
 app.post('/signup', signupLimiter, async (req: Request, res: Response) => {
   console.log('📝 Signup request received');
-  
+
   const { username, password, email } = req.body;
-  
+
   // Input validation
   const usernameValidation = validateUsername(username);
   if (!usernameValidation.valid) {
     res.status(400).json({ error: usernameValidation.error });
     return;
   }
-  
+
   const emailValidation = validateEmail(email);
   if (!emailValidation.valid) {
     res.status(400).json({ error: emailValidation.error });
     return;
   }
-  
+
   const passwordValidation = validatePassword(password);
   if (!passwordValidation.valid) {
     res.status(400).json({ error: passwordValidation.error });
@@ -173,9 +173,9 @@ app.post('/signup', signupLimiter, async (req: Request, res: Response) => {
  */
 app.post('/signin', authLimiter, async (req: Request, res: Response) => {
   console.log('🔑 Signin request received');
-  
+
   const { email, password } = req.body;
-  
+
   // Basic validation
   if (!email || !password) {
     res.status(400).json({ error: "Email and password are required" });
@@ -184,7 +184,7 @@ app.post('/signin', authLimiter, async (req: Request, res: Response) => {
 
   try {
     const user = await UserModel.findOne({ email: email.toLowerCase() });
-    
+
     if (!user) {
       res.status(401).json({ error: "Invalid credentials" });
       return;
@@ -248,9 +248,9 @@ app.post('/signin', authLimiter, async (req: Request, res: Response) => {
  */
 app.post('/refresh', refreshLimiter, async (req: Request, res: Response) => {
   console.log('🔄 Token refresh request');
-  
+
   const { refreshToken } = req.body;
-  
+
   if (!refreshToken) {
     res.status(400).json({ error: "Refresh token required" });
     return;
@@ -259,16 +259,16 @@ app.post('/refresh', refreshLimiter, async (req: Request, res: Response) => {
   try {
     // Verify the refresh token
     const decoded = verifyToken(refreshToken);
-    
+
     if (decoded.type !== 'refresh') {
       res.status(401).json({ error: "Invalid token type" });
       return;
     }
 
     // Check if token exists in database and is not revoked
-    const storedToken = await RefreshTokenModel.findOne({ 
+    const storedToken = await RefreshTokenModel.findOne({
       jti: decoded.jti,
-      isRevoked: false 
+      isRevoked: false
     });
 
     if (!storedToken) {
@@ -305,7 +305,7 @@ app.post('/refresh', refreshLimiter, async (req: Request, res: Response) => {
  */
 app.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { refreshToken } = req.body;
-  
+
   if (refreshToken) {
     try {
       const decoded = verifyToken(refreshToken);
@@ -331,15 +331,15 @@ app.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) => {
  */
 app.get('/viewProjects', authMiddleware, async (req: AuthRequest, res: Response) => {
   console.log('📋 Fetching projects');
-  
+
   try {
     let query = {};
-    
+
     // Admins can see all projects
     if (req.role !== 'admin') {
       query = { userId: req.id };
     }
-    
+
     const projects = await ProjectModel.find(query);
     res.json({ results: projects });
   } catch (error) {
@@ -354,7 +354,7 @@ app.get('/viewProjects', authMiddleware, async (req: AuthRequest, res: Response)
  */
 app.delete('/deleteProject', authMiddleware, async (req: AuthRequest, res: Response) => {
   const { projectId } = req.body;
-  
+
   if (!projectId) {
     res.status(400).json({ error: "Project ID required" });
     return;
@@ -365,7 +365,7 @@ app.delete('/deleteProject', authMiddleware, async (req: AuthRequest, res: Respo
   try {
     // Find the project first
     const project = await ProjectModel.findOne({ projectId: sanitizedProjectId });
-    
+
     if (!project) {
       res.status(404).json({ error: "Project not found" });
       return;
@@ -392,7 +392,7 @@ app.delete('/deleteProject', authMiddleware, async (req: AuthRequest, res: Respo
     await deleteFolder("source-code", `${sanitizedProjectId}/`);
     await deleteFolder("static-builds", `${sanitizedProjectId}/`);
     await ProjectModel.deleteOne({ projectId: sanitizedProjectId });
-    
+
     res.json({ message: "Project deleted successfully" });
   } catch (error) {
     console.error('Delete error:', error);
@@ -405,8 +405,8 @@ app.delete('/deleteProject', authMiddleware, async (req: AuthRequest, res: Respo
  * Requires developer or admin role
  */
 app.post('/deploy', authMiddleware, requirePermission('project:create'), deployLimiter, async (req: AuthRequest, res: Response) => {
-  const { repoUrl } = req.body;
-  
+  const { repoUrl, deploymentType, buildCommand, outputDir, envVars } = req.body;
+
   // Validate repository URL
   const urlValidation = validateRepoUrl(repoUrl);
   if (!urlValidation.valid) {
@@ -414,8 +414,22 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), deployL
     return;
   }
 
-  console.log('🚀 Deploy request for:', repoUrl);
-  
+  // Validate deployment type
+  const validDeploymentTypes = ['vite-react-ts', 'vite-react', 'create-react-app', 'nextjs', 'static', 'custom'];
+  const selectedDeploymentType = deploymentType || 'vite-react-ts';
+  if (!validDeploymentTypes.includes(selectedDeploymentType)) {
+    res.status(400).json({ error: `Invalid deployment type. Must be one of: ${validDeploymentTypes.join(', ')}` });
+    return;
+  }
+
+  // Validate envVars if provided
+  if (envVars && typeof envVars !== 'object') {
+    res.status(400).json({ error: 'Environment variables must be an object' });
+    return;
+  }
+
+  console.log('🚀 Deploy request for:', repoUrl, '| Type:', selectedDeploymentType);
+
   const userId = req.id;
   const id = generateProjectId();
   const repoMeta = repoUrl.replace('.git', '').replace('https://github.com/', 'https://api.github.com/repos/');
@@ -429,13 +443,17 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), deployL
 
     console.log('📌 Default branch:', defaultBranch, '| Commit:', commitSha);
 
-    // Queue deployment job
+    // Queue deployment job with deployment configuration
     const jobData = {
       projectId: id,
       repoUrl: repoUrl,
       userId: userId,
       commitSha: commitSha,
       defaultBranch: defaultBranch,
+      deploymentType: selectedDeploymentType,
+      buildCommand: buildCommand || null,
+      outputDir: outputDir || null,
+      envVars: envVars || {},
     };
 
     await deploymentQueue.add('deploy', jobData, {
@@ -451,6 +469,10 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), deployL
       projectId: id,
       commitSha: commitSha,
       defaultBranch: defaultBranch,
+      deploymentType: selectedDeploymentType,
+      buildCommand: buildCommand || null,
+      outputDir: outputDir || null,
+      envVars: envVars || {},
     });
 
     res.status(202).json({
@@ -458,15 +480,16 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), deployL
       projectId: id,
       commitSha: commitSha,
       defaultBranch: defaultBranch,
+      deploymentType: selectedDeploymentType,
     });
   } catch (error: any) {
     console.error('Deploy error:', error);
-    
+
     if (error.response?.status === 404) {
       res.status(404).json({ error: "Repository not found or is private" });
       return;
     }
-    
+
     res.status(500).json({ error: "Deployment failed" });
   }
 });
@@ -493,7 +516,7 @@ app.get('/admin/users', authMiddleware, requireRole(['admin']), async (req: Auth
 app.put('/admin/users/:userId/role', authMiddleware, requireRole(['admin']), async (req: AuthRequest, res: Response) => {
   const { userId } = req.params;
   const { role } = req.body;
-  
+
   if (!['admin', 'developer', 'viewer'].includes(role)) {
     res.status(400).json({ error: "Invalid role" });
     return;
@@ -513,6 +536,7 @@ app.put('/admin/users/:userId/role', authMiddleware, requireRole(['admin']), asy
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Secure Upload Service running on http://localhost:${PORT}`);
+  const serverIp = process.env.SERVER_IP || '172.17.9.74';
+  console.log(`🚀 Secure Upload Service running on http://${serverIp}:${PORT}`);
   console.log(`🔐 Security features enabled: RS256 JWT, RBAC, Rate Limiting, Input Validation, Account Lockout`);
 });

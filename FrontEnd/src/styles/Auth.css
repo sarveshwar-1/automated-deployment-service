@@ -1,28 +1,30 @@
-/* Auth Pages - SignUp and SignIn */
+/* Auth Pages - SignUp and SignIn - Dark Theme */
 .auth-container {
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: calc(100vh - 70px);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0a0a0f 0%, #16161d 100%);
   padding: 20px;
 }
 
 .auth-box {
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  background: #16161d;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   padding: 40px;
   width: 100%;
-  max-width: 400px;
+  max-width: 420px;
+  border: 1px solid #2a2a3a;
 }
 
 .auth-box h2 {
   margin-top: 0;
-  color: #333;
+  color: #e0e0e0;
   text-align: center;
   margin-bottom: 30px;
   font-size: 28px;
+  font-weight: 600;
 }
 
 .form-group {
@@ -31,43 +33,52 @@
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
-  color: #333;
+  margin-bottom: 10px;
+  color: #b0b0b0;
   font-weight: 600;
   font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 12px;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
+  padding: 14px 16px;
+  border: 2px solid #2a2a3a;
+  border-radius: 10px;
   font-size: 14px;
-  transition: border-color 0.3s;
+  transition: all 0.3s ease;
   box-sizing: border-box;
+  background: #1e1e28;
+  color: #e0e0e0;
+}
+
+.form-group input::placeholder {
+  color: #666;
 }
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
 }
 
 .auth-box button {
   width: 100%;
-  padding: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 16px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 12px;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: all 0.3s ease;
 }
 
 .auth-box button:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
 }
 
 .auth-box button:disabled {
@@ -76,36 +87,38 @@
 }
 
 .error-message {
-  background-color: #fee;
-  color: #c00;
-  padding: 12px;
-  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  padding: 14px 16px;
+  border-radius: 10px;
   margin-bottom: 20px;
-  border-left: 4px solid #c00;
+  border-left: 4px solid #ef4444;
   font-size: 14px;
 }
 
 .auth-link {
   text-align: center;
-  margin-top: 20px;
-  color: #666;
+  margin-top: 24px;
+  color: #888;
   font-size: 14px;
 }
 
 .auth-link a {
-  color: #667eea;
+  color: #6366f1;
   text-decoration: none;
   font-weight: 600;
+  transition: color 0.2s;
 }
 
 .auth-link a:hover {
+  color: #818cf8;
   text-decoration: underline;
 }
 
 .password-hint {
   display: block;
-  margin-top: 6px;
+  margin-top: 8px;
   color: #666;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.5;
 }

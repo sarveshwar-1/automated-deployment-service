@@ -2,13 +2,13 @@ import { Queue, Worker } from "bullmq";
 import Redis from "ioredis";
 import simpleGit from "simple-git";
 import path from "path";
-import { minioClient } from "./minio";  
+import { minioClient } from "./minio";
 import { getAllFiles, getContentType } from "./utils";
 import fs from "fs";
 
 // Redis connection for queue
 const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
+  host: process.env.REDIS_HOST || '172.17.9.74',
   port: parseInt(process.env.REDIS_PORT || '6380'),
   maxRetriesPerRequest: null,
 });
@@ -36,7 +36,7 @@ const deploymentWorker = new Worker(
       const mirrorPath = path.join(__dirname, `gitBare/${projectId}.git`);
 
       // ---- ACTUAL DEPLOYMENT LOGIC ----
-      
+
       // Check if mirror repo already exists
       if (fs.existsSync(mirrorPath)) {
         console.log('Mirror repo exists, updating...');
@@ -60,30 +60,30 @@ const deploymentWorker = new Worker(
       const files = getAllFiles(clonePath);
       let uploadedCount = 0;
       let skippedCount = 0;
-      
+
       for (const file of files) {
         const localPath = path.join(clonePath, file);
         const objectKey = `${projectId}/${file}`;
-        
+
         // Verify file exists and has content before uploading
         if (!fs.existsSync(localPath)) {
           console.warn(`  ⚠️ Skipping non-existent file: ${file}`);
           skippedCount++;
           continue;
         }
-        
+
         const stats = fs.statSync(localPath);
-        
+
         // Log file details for debugging
         console.log(`  📄 Uploading: ${file} (${stats.size} bytes)`);
-        
+
         // Upload with explicit content type to preserve file integrity
         const contentType = getContentType(file);
         await minioClient.fPutObject("source-code", objectKey, localPath, {
           "Content-Type": contentType,
           "X-Amz-Meta-Original-Size": stats.size.toString(),
         });
-        
+
         // Verify upload was successful by checking the object exists
         uploadedCount++;
       }
@@ -93,18 +93,23 @@ const deploymentWorker = new Worker(
 
       // ---- QUEUE BUILD JOB ----
       console.log(`📦 Queuing build job for project ${projectId}...`);
+      const { deploymentType, buildCommand, outputDir, envVars } = job.data;
       await buildQueue.add('build', {
         projectId,
         repoUrl,
         userId,
         commitSha,
         defaultBranch,
+        deploymentType: deploymentType || 'vite-react-ts',
+        buildCommand: buildCommand || null,
+        outputDir: outputDir || null,
+        envVars: envVars || {},
       }, {
         attempts: 3,
         backoff: { type: 'exponential', delay: 5000 },
         removeOnComplete: true,
       });
-      console.log(`✅ Build job queued for project ${projectId}`);
+      console.log(`✅ Build job queued for project ${projectId} (type: ${deploymentType || 'vite-react-ts'})`);
 
       return { success: true, projectId, filesUploaded: uploadedCount };
     } catch (err: any) {

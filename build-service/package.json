@@ -20,6 +20,7 @@
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "ioredis": "^5.8.2",
+    "kafkajs": "^2.2.4",
     "minio": "^8.0.6"
   },
   "devDependencies": {

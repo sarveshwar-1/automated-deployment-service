@@ -128,7 +128,7 @@ app.get("/", async (req: Request, res: Response) => {
         <div class="info">
           <p>Welcome to the static file server!</p>
           <p>Access your deployed projects at:</p>
-          <code>http://localhost:3003/{projectId}/</code>
+          <code>http://172.17.9.74:3001/{projectId}/</code>
           <p style="margin-top: 20px;">Replace <code>{projectId}</code> with your actual project ID.</p>
         </div>
       </body>
@@ -139,6 +139,7 @@ app.get("/", async (req: Request, res: Response) => {
 const PORT = process.env.PORT || 3003;
 
 app.listen(PORT, () => {
-  console.log(`🌐 Build service server running on http://localhost:${PORT}`);
-  console.log(`Access projects at: http://localhost:${PORT}/{projectId}/`);
+  const serverIp = process.env.SERVER_IP || '172.17.9.74';
+  console.log(`🌐 Build service server running on http://${serverIp}:${PORT}`);
+  console.log(`Access projects at: http://${serverIp}:${PORT}/{projectId}/`);
 });

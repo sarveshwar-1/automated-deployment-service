@@ -13,10 +13,10 @@ const userSchema = new Schema({
   name: { type: String, required: true },
   password: { type: String, required: true },
   // RBAC - Role-based access control
-  role: { 
-    type: String, 
-    enum: ['admin', 'developer', 'viewer'], 
-    default: 'developer' 
+  role: {
+    type: String,
+    enum: ['admin', 'developer', 'viewer'],
+    default: 'developer'
   },
   // Account lockout fields
   failedLoginAttempts: { type: Number, default: 0 },
@@ -34,6 +34,15 @@ const projectSchema = new Schema({
   userId: ObjectId,
   commitSha: String,
   defaultBranch: String,
+  // Deployment configuration
+  deploymentType: {
+    type: String,
+    enum: ['vite-react-ts', 'vite-react', 'create-react-app', 'nextjs', 'static', 'custom'],
+    default: 'vite-react-ts'
+  },
+  buildCommand: { type: String, default: null }, // Custom build command override
+  outputDir: { type: String, default: null }, // Custom output directory
+  envVars: { type: Map, of: String, default: {} }, // Build-time environment variables
   createdAt: { type: Date, default: Date.now }
 });
 

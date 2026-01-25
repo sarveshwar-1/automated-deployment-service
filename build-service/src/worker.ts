@@ -6,12 +6,18 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { minioClient, BUCKETS } from "./minio";
 import { getAllFiles, getContentType } from "./utils";
+import { client } from "./kafka";
 
 const execAsync = promisify(exec);
+const producer = client.producer();
+
+(async () => {
+  await producer.connect();
+})();
 
 // Redis connection for queue
 const redis = new Redis({
-  host: process.env.REDIS_HOST || "localhost",
+  host: process.env.REDIS_HOST || "172.17.9.74",
   port: parseInt(process.env.REDIS_PORT || "6380"),
   maxRetriesPerRequest: null,
 });
@@ -20,6 +26,53 @@ const redis = new Redis({
 const buildQueue = new Queue("builds", {
   connection: redis,
 });
+
+// Deployment type configurations
+interface DeploymentConfig {
+  installCommand: string;
+  buildCommand: string;
+  outputDir: string;
+  globalDependencies: string[];
+}
+
+const DEPLOYMENT_CONFIGS: Record<string, DeploymentConfig> = {
+  'vite-react-ts': {
+    installCommand: 'npm install',
+    buildCommand: 'npx tsc -b && npx vite build',
+    outputDir: 'dist',
+    globalDependencies: ['typescript', 'vite'],
+  },
+  'vite-react': {
+    installCommand: 'npm install',
+    buildCommand: 'npx vite build',
+    outputDir: 'dist',
+    globalDependencies: ['vite'],
+  },
+  'create-react-app': {
+    installCommand: 'npm install',
+    buildCommand: 'npm run build',
+    outputDir: 'build',
+    globalDependencies: [],
+  },
+  'nextjs': {
+    installCommand: 'npm install',
+    buildCommand: 'npm run build',
+    outputDir: '.next',
+    globalDependencies: [],
+  },
+  'static': {
+    installCommand: '',
+    buildCommand: '',
+    outputDir: '.',
+    globalDependencies: [],
+  },
+  'custom': {
+    installCommand: 'npm install',
+    buildCommand: 'npm run build',
+    outputDir: 'dist',
+    globalDependencies: [],
+  },
+};
 
 // Helper function to download files from MinIO
 async function downloadFromMinio(
@@ -67,12 +120,12 @@ async function downloadFromMinio(
   // Now download all files sequentially to avoid race conditions
   for (const { objectName, localFilePath } of objectsToDownload) {
     await minioClient.fGetObject(BUCKETS.SOURCE_CODE, objectName, localFilePath);
-    
+
     // Verify the file was downloaded correctly
     if (fs.existsSync(localFilePath)) {
       const stats = fs.statSync(localFilePath);
       console.log(`  📄 Downloaded: ${objectName} (${stats.size} bytes)`);
-      
+
       // Check if file is empty (potential issue)
       if (stats.size === 0) {
         console.warn(`  ⚠️ Warning: Downloaded file is empty: ${objectName}`);
@@ -87,9 +140,21 @@ async function downloadFromMinio(
 
 // Helper function to detect and run build commands
 async function runBuildCommands(
-  projectPath: string
+  projectPath: string,
+  deploymentType: string = 'vite-react-ts',
+  customBuildCommand: string | null = null,
+  envVars: Record<string, string> = {}
 ): Promise<{ stdout: string; stderr: string; isStatic: boolean }> {
-  console.log(`🔨 Checking build setup in ${projectPath}...`);
+  console.log(`🔨 Building project with deployment type: ${deploymentType}...`);
+
+  // Get deployment configuration
+  const config = DEPLOYMENT_CONFIGS[deploymentType] || DEPLOYMENT_CONFIGS['vite-react-ts'];
+
+  // Handle static sites - no build needed
+  if (deploymentType === 'static') {
+    console.log('📁 Static site - no build required');
+    return { stdout: '', stderr: '', isStatic: true };
+  }
 
   // Check if package.json exists
   const packageJsonPath = path.join(projectPath, "package.json");
@@ -100,46 +165,110 @@ async function runBuildCommands(
 
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
 
-  // Check if build script exists
-  if (!packageJson.scripts?.build) {
-    console.log("No build script found, treating as static site");
+  // Determine package manager
+  let installCommand = config.installCommand;
+  if (fs.existsSync(path.join(projectPath, "pnpm-lock.yaml"))) {
+    installCommand = installCommand.replace('npm install', 'pnpm install');
+  } else if (fs.existsSync(path.join(projectPath, "yarn.lock"))) {
+    installCommand = installCommand.replace('npm install', 'yarn install');
+  }
+
+  // Determine build command - use custom if provided, otherwise use config
+  let buildCommand = customBuildCommand || config.buildCommand;
+
+  // If using default config but package.json has a build script, use npm run build
+  if (!customBuildCommand && packageJson.scripts?.build && deploymentType === 'custom') {
+    buildCommand = 'npm run build';
+  }
+
+  console.log(`📦 Install command: ${installCommand || 'none'}`);
+  console.log(`🔨 Build command: ${buildCommand || 'none'}`);
+
+  // Build the full command
+  const commands: string[] = [];
+  if (installCommand) commands.push(installCommand);
+  if (buildCommand) commands.push(buildCommand);
+
+  if (commands.length === 0) {
+    console.log("No commands to run, treating as static site");
     return { stdout: "", stderr: "", isStatic: true };
   }
 
-  console.log(`Found build script: ${packageJson.scripts.build}`);
-
-  // Determine package manager (npm, pnpm, yarn)
-  let installCommand = "npm install";
-  let buildCommand = "npm run build";
-
-  if (fs.existsSync(path.join(projectPath, "pnpm-lock.yaml"))) {
-    installCommand = "pnpm install";
-    buildCommand = "pnpm run build";
-  } else if (fs.existsSync(path.join(projectPath, "yarn.lock"))) {
-    installCommand = "yarn install";
-    buildCommand = "yarn build";
-  }
-
-  const fullCommand = `${installCommand} && ${buildCommand}`;
+  const fullCommand = commands.join(' && ');
   console.log(`Running: ${fullCommand}`);
 
+  // Prepare environment variables
+  const buildEnv = {
+    ...process.env,
+    CI: "true",
+    NODE_ENV: "development", // Force dev dependencies installation
+    ...envVars,
+  };
+
   // Run the build command
-  const { stdout, stderr } = await execAsync(fullCommand, {
-    cwd: projectPath,
-    env: { ...process.env, CI: "true" },
-    maxBuffer: 1024 * 1024 * 50, // 50MB buffer for large outputs
-  });
+  try {
+    const { stdout, stderr } = await execAsync(fullCommand, {
+      cwd: projectPath,
+      env: buildEnv,
+      maxBuffer: 1024 * 1024 * 50, // 50MB buffer for large outputs
+    });
 
-  console.log("Build stdout:", stdout);
-  if (stderr) {
-    console.log("Build stderr:", stderr);
+    console.log("Build stdout:", stdout);
+    if (stderr) {
+      console.log("Build stderr:", stderr);
+    }
+
+    await producer.send({
+      topic: 'build-logs',
+      messages: [
+        {
+          value: JSON.stringify({
+            status: "success",
+            message: "Build completed successfully",
+            projectPath,
+            stdout,
+            stderr,
+          }),
+        },
+      ],
+    });
+
+    return { stdout, stderr, isStatic: false };
+  } catch (error: any) {
+    console.error("❌ Build command failed!");
+    console.error("Exit code:", error.code);
+    if (error.stdout) console.error("Build stdout:", error.stdout);
+    if (error.stderr) console.error("Build stderr:", error.stderr);
+    throw error;
   }
-
-  return { stdout, stderr, isStatic: false };
 }
 
 // Helper function to find the build output directory
-function findBuildOutputDir(projectPath: string): string {
+function findBuildOutputDir(
+  projectPath: string,
+  deploymentType: string = 'vite-react-ts',
+  customOutputDir: string | null = null
+): string {
+  // If custom output directory is specified, use it
+  if (customOutputDir) {
+    const customPath = path.join(projectPath, customOutputDir);
+    if (fs.existsSync(customPath) && fs.statSync(customPath).isDirectory()) {
+      console.log(`Using custom output directory: ${customOutputDir}`);
+      return customPath;
+    }
+    console.warn(`Custom output directory '${customOutputDir}' not found, searching for alternatives...`);
+  }
+
+  // Get expected output dir from deployment config
+  const config = DEPLOYMENT_CONFIGS[deploymentType] || DEPLOYMENT_CONFIGS['vite-react-ts'];
+  const expectedDir = path.join(projectPath, config.outputDir);
+
+  if (fs.existsSync(expectedDir) && fs.statSync(expectedDir).isDirectory()) {
+    console.log(`Found expected output directory for ${deploymentType}: ${config.outputDir}`);
+    return expectedDir;
+  }
+
+  // Fallback: search common directories
   const possibleDirs = ["dist", "build", "out", ".next/static", "public"];
 
   for (const dir of possibleDirs) {
@@ -171,34 +300,34 @@ function rewriteAssetPaths(content: string, projectId: string, fileType: string)
     // Rewrite src="/..." to src="/projectId/..."
     content = content.replace(/src="\//g, `src="/${projectId}/`);
     content = content.replace(/src='\//g, `src='/${projectId}/`);
-    
+
     // Rewrite href="/..." to href="/projectId/..." (but not href="http" or href="https" or href="#")
     content = content.replace(/href="\/(?!\/)/g, `href="/${projectId}/`);
     content = content.replace(/href='\/(?!\/)/g, `href='/${projectId}/`);
-    
+
     // Rewrite content URLs in meta tags (e.g., og:image)
     content = content.replace(/content="\/(?!\/)/g, `content="/${projectId}/`);
     content = content.replace(/content='\/(?!\/)/g, `content='/${projectId}/`);
   }
-  
+
   // For JS files, rewrite common patterns for asset loading
   if (fileType === 'js') {
     // Rewrite "/static/ patterns commonly used in React/webpack builds
     content = content.replace(/"\/static\//g, `"/${projectId}/static/`);
     content = content.replace(/'\/static\//g, `'/${projectId}/static/`);
-    
+
     // Rewrite manifest.json and other root-level assets
     content = content.replace(/"\/manifest\.json"/g, `"/${projectId}/manifest.json"`);
     content = content.replace(/"\/favicon\.ico"/g, `"/${projectId}/favicon.ico"`);
   }
-  
+
   // For CSS files, rewrite url() references
   if (fileType === 'css') {
     content = content.replace(/url\(\//g, `url(/${projectId}/`);
     content = content.replace(/url\("\//g, `url("/${projectId}/`);
     content = content.replace(/url\('\//g, `url('/${projectId}/`);
   }
-  
+
   return content;
 }
 
@@ -244,40 +373,40 @@ async function uploadToMinio(
     const fileTypeCategory = getFileTypeCategory(file);
     let fileContent = fs.readFileSync(localPath);
     let finalSize = fileContent.length;
-    
+
     if (fileTypeCategory) {
       // Rewrite asset paths in HTML, JS, and CSS files
       let textContent = fileContent.toString('utf-8');
       const originalLength = textContent.length;
       textContent = rewriteAssetPaths(textContent, projectId, fileTypeCategory);
-      
+
       if (textContent.length !== originalLength) {
         console.log(`  🔄 Rewrote asset paths in: ${file}`);
       }
-      
+
       // Write the modified content to a temp file for upload
       const tempPath = `${localPath}.modified`;
       fs.writeFileSync(tempPath, textContent, 'utf-8');
       finalSize = textContent.length;
-      
+
       console.log(`  📄 Uploading: ${file} (${finalSize} bytes, type: ${contentType})`);
-      
+
       await minioClient.fPutObject(BUCKETS.STATIC_BUILDS, objectKey, tempPath, {
         "Content-Type": contentType,
         "X-Amz-Meta-Original-Size": stats.size.toString(),
       });
-      
+
       // Clean up temp file
       fs.unlinkSync(tempPath);
     } else {
       console.log(`  📄 Uploading: ${file} (${finalSize} bytes, type: ${contentType})`);
-      
+
       await minioClient.fPutObject(BUCKETS.STATIC_BUILDS, objectKey, localPath, {
         "Content-Type": contentType,
         "X-Amz-Meta-Original-Size": stats.size.toString(),
       });
     }
-    
+
     uploadedCount++;
   }
 
@@ -292,8 +421,15 @@ const buildWorker = new Worker(
     console.log(`\n🏗️ Processing build job ${job.id}...`);
     console.log("Job data:", job.data);
 
-    const { projectId } = job.data;
+    const { projectId, deploymentType, buildCommand, outputDir, envVars } = job.data;
     const buildPath = path.join("/tmp", `build-${projectId}`);
+
+    console.log(`📋 Deployment type: ${deploymentType || 'vite-react-ts'}`);
+    if (buildCommand) console.log(`🔧 Custom build command: ${buildCommand}`);
+    if (outputDir) console.log(`📁 Custom output directory: ${outputDir}`);
+    if (envVars && Object.keys(envVars).length > 0) {
+      console.log(`🔐 Environment variables: ${Object.keys(envVars).join(', ')}`);
+    }
 
     try {
       // Step 1: Clean up any existing build directory
@@ -305,15 +441,22 @@ const buildWorker = new Worker(
       // Step 2: Download source code from MinIO
       await downloadFromMinio(projectId, buildPath);
 
-      // Step 3: Run build commands
-      const buildResult = await runBuildCommands(buildPath);
+      // Step 3: Run build commands with deployment type
+      const buildResult = await runBuildCommands(
+        buildPath,
+        deploymentType || 'vite-react-ts',
+        buildCommand || null,
+        envVars || {}
+      );
       const isStatic = buildResult.isStatic;
 
       // Step 4: Find and upload build output
-      const outputDir = isStatic ? buildPath : findBuildOutputDir(buildPath);
+      const outputDirectory = isStatic
+        ? buildPath
+        : findBuildOutputDir(buildPath, deploymentType || 'vite-react-ts', outputDir || null);
 
       // Check if index.html exists and has content
-      const indexPath = path.join(outputDir, "index.html");
+      const indexPath = path.join(outputDirectory, "index.html");
       if (!fs.existsSync(indexPath)) {
         throw new Error("Build output does not contain index.html");
       }
@@ -323,14 +466,14 @@ const buildWorker = new Worker(
       }
       console.log(`✅ Found valid index.html (${indexContent.length} characters)`);
 
-      const uploadedCount = await uploadToMinio(projectId, outputDir);
+      const uploadedCount = await uploadToMinio(projectId, outputDirectory);
 
       // Step 5: Clean up
       console.log("🧹 Cleaning up build directory...");
       fs.rmSync(buildPath, { recursive: true, force: true });
 
-      console.log(`✅ Build completed for project ${projectId}`);
-      return { success: true, projectId, filesUploaded: uploadedCount };
+      console.log(`✅ Build completed for project ${projectId} (type: ${deploymentType || 'vite-react-ts'})`);
+      return { success: true, projectId, filesUploaded: uploadedCount, deploymentType };
     } catch (err: any) {
       console.error(`❌ Build failed for project ${projectId}: ${err.message}`);
 

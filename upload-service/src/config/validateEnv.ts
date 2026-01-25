@@ -9,22 +9,22 @@
 interface EnvConfig {
   // Database
   MONGODB_URI: string;
-  
+
   // Redis
   REDIS_HOST: string;
   REDIS_PORT: number;
-  
+
   // MinIO
   MINIO_ENDPOINT: string;
   MINIO_PORT: number;
   MINIO_ACCESS_KEY: string;
   MINIO_SECRET_KEY: string;
   MINIO_USE_SSL: boolean;
-  
+
   // Security
   NODE_ENV: string;
   FRONTEND_URL: string;
-  
+
   // Optional
   PORT: number;
   KEYS_DIR?: string;
@@ -48,29 +48,29 @@ const warningEnvVars = [
  */
 export function validateEnvironment(): void {
   console.log('🔍 Validating environment configuration...');
-  
+
   const missing: string[] = [];
   const warnings: string[] = [];
-  
+
   // Check required variables
   for (const key of requiredEnvVars) {
     if (!process.env[key]) {
       missing.push(key);
     }
   }
-  
+
   // Check warning-level variables
   for (const key of warningEnvVars) {
     if (!process.env[key]) {
       warnings.push(key);
     }
   }
-  
+
   // Log warnings
   if (warnings.length > 0) {
     console.warn(`⚠️ Missing optional environment variables: ${warnings.join(', ')}`);
   }
-  
+
   // Fail on missing required variables (only in production)
   if (missing.length > 0 && process.env.NODE_ENV === 'production') {
     console.error(`❌ Missing required environment variables: ${missing.join(', ')}`);
@@ -79,7 +79,7 @@ export function validateEnvironment(): void {
   } else if (missing.length > 0) {
     console.warn(`⚠️ Missing environment variables (using defaults): ${missing.join(', ')}`);
   }
-  
+
   // Security checks
   if (process.env.NODE_ENV === 'production') {
     // Check for insecure defaults
@@ -87,7 +87,7 @@ export function validateEnvironment(): void {
       console.warn('⚠️ SECURITY WARNING: Using default MinIO credentials in production!');
     }
   }
-  
+
   console.log('✅ Environment validation complete');
 }
 
@@ -96,16 +96,16 @@ export function validateEnvironment(): void {
  */
 export function getConfig(): EnvConfig {
   return {
-    MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27018/automated-deployment',
-    REDIS_HOST: process.env.REDIS_HOST || 'localhost',
+    MONGODB_URI: process.env.MONGODB_URI || 'mongodb://172.17.9.74:27018/automated-deployment',
+    REDIS_HOST: process.env.REDIS_HOST || '172.17.9.74',
     REDIS_PORT: parseInt(process.env.REDIS_PORT || '6380'),
-    MINIO_ENDPOINT: process.env.MINIO_ENDPOINT || 'localhost',
+    MINIO_ENDPOINT: process.env.MINIO_ENDPOINT || '172.17.9.74',
     MINIO_PORT: parseInt(process.env.MINIO_PORT || '9010'),
     MINIO_ACCESS_KEY: process.env.MINIO_ACCESS_KEY || 'minioadmin',
     MINIO_SECRET_KEY: process.env.MINIO_SECRET_KEY || 'minioadmin',
     MINIO_USE_SSL: process.env.MINIO_USE_SSL === 'true',
     NODE_ENV: process.env.NODE_ENV || 'development',
-    FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
+    FRONTEND_URL: process.env.FRONTEND_URL || 'http://172.17.9.74:5173',
     PORT: parseInt(process.env.PORT || '3000'),
     KEYS_DIR: process.env.KEYS_DIR
   };
