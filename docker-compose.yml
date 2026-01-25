@@ -92,9 +92,13 @@ services:
       - MINIO_SECRET_KEY=minioadmin
       - MINIO_USE_SSL=false
       - JWT_SECRET=ILoveKiaraAdvani
+      - GITHUB_CLIENT_ID=Ov23lizLiwJ3aUUXKItr
+      - GITHUB_CLIENT_SECRET=f17e7703294f349a1af705d3b6ee2b92e92687aa
+      - GITHUB_CALLBACK_URL=http://localhost:5173/auth/github/callback
     volumes:
       - upload_temp:/tmp
       - git_mirrors:/app/src/gitBare
+      - rsa_keys:/app/keys
     depends_on:
       mongodb:
         condition: service_healthy
@@ -222,6 +226,7 @@ volumes:
   upload_temp:
   build_temp:
   git_mirrors:
+  rsa_keys:
 
 networks:
   ads-network:

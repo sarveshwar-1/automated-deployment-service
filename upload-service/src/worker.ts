@@ -31,11 +31,19 @@ const deploymentWorker = new Worker(
     console.log('Job data:', job.data);
 
     try {
-      const { projectId, repoUrl, userId, commitSha, defaultBranch } = job.data;
+      const { projectId, repoUrl, userId, commitSha, defaultBranch, githubToken } = job.data;
       const clonePath = path.join('/tmp', projectId);
       const mirrorPath = path.join(__dirname, `gitBare/${projectId}.git`);
 
       // ---- ACTUAL DEPLOYMENT LOGIC ----
+      
+      // Construct authenticated URL if GitHub token is available
+      let authenticatedUrl = repoUrl;
+      if (githubToken && repoUrl.includes('github.com')) {
+        // Format: https://x-access-token:<token>@github.com/user/repo.git
+        authenticatedUrl = repoUrl.replace('https://github.com/', `https://x-access-token:${githubToken}@github.com/`);
+        console.log('🔑 Using authenticated git clone (avoids rate limits)');
+      }
       
       // Check if mirror repo already exists
       if (fs.existsSync(mirrorPath)) {
@@ -44,7 +52,7 @@ const deploymentWorker = new Worker(
         await simpleGit(mirrorPath).fetch();
       } else {
         console.log('📥 Cloning repository (first time)...');
-        await simpleGit().clone(repoUrl, mirrorPath, ["--mirror"]);
+        await simpleGit().clone(authenticatedUrl, mirrorPath, ["--mirror"]);
       }
 
       // Clean up old working directory if it exists

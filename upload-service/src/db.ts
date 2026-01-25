@@ -11,7 +11,18 @@ const ObjectId = mongoose.ObjectId;
 const userSchema = new Schema({
   email: { type: String, unique: true, required: true },
   name: { type: String, required: true },
-  password: { type: String, required: true },
+  password: { type: String, required: false }, // Optional for GitHub OAuth users
+  
+  // GitHub OAuth fields
+  githubId: { type: String, unique: true, sparse: true }, // GitHub user ID
+  githubUsername: { type: String }, // GitHub username
+  githubAccessToken: { type: String }, // Encrypted token for API access
+  authProvider: { 
+    type: String, 
+    enum: ['local', 'github'], 
+    default: 'local' 
+  },
+  
   // RBAC - Role-based access control
   role: { 
     type: String, 

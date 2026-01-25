@@ -210,291 +210,366 @@ function Dashboard() {
 
   const projectName = project.url.split("/").pop() || "Unknown Project";
 
+  const getStatusConfig = (status: string) => {
+    switch(status) {
+      case 'success':
+        return { label: 'Production', color: 'success' };
+      case 'building':
+        return { label: 'Building', color: 'building' };
+      case 'failed':
+        return { label: 'Failed', color: 'failed' };
+      case 'pending':
+        return { label: 'Pending', color: 'pending' };
+      default:
+        return { label: 'Unknown', color: 'unknown' };
+    }
+  };
+
+  const statusConfig = getStatusConfig(project.buildStatus || '');
+
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-header">
-        <button onClick={() => navigate('/projects')} className="back-btn">
-          ← Back to Projects
+    <div className="dashboard-wrapper">
+      {/* Top Navigation Bar */}
+      <div className="dashboard-nav">
+        <button onClick={() => navigate('/projects')} className="nav-back">
+          Back to Projects
         </button>
-        <div className="project-title">
-          <h1>{projectName}</h1>
-          <div className="project-status">
-            {project.buildStatus && (
-              <span className={`status-badge status-${project.buildStatus}`}>
-                {project.buildStatus === 'building' && 'Building'}
-                {project.buildStatus === 'success' && 'Live'}
-                {project.buildStatus === 'failed' && 'Failed'}
-                {project.buildStatus === 'pending' && 'Pending'}
-              </span>
-            )}
-          </div>
+        <div className="nav-actions">
+          {project.buildStatus === 'success' && (
+            <a 
+              href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="nav-btn nav-btn-primary"
+            >
+              Visit Site
+            </a>
+          )}
         </div>
       </div>
 
-      <div className="dashboard-tabs">
-        <button 
-          className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          Overview
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'deployments' ? 'active' : ''}`}
-          onClick={() => setActiveTab('deployments')}
-        >
-          Deployments
-        </button>
-        <button 
-          className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
-        >
-          Settings
-        </button>
-      </div>
-
-      <div className="dashboard-content">
-        {activeTab === 'overview' && (
-          <div className="overview-section">
-            <div className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-icon">🚀</div>
-                <div className="stat-content">
-                  <div className="stat-label">Build Status</div>
-                  <div className={`stat-value status-${project.buildStatus || 'unknown'}`}>
-                    {project.buildStatus === 'building' && 'Building...'}
-                    {project.buildStatus === 'success' && 'Live'}
-                    {project.buildStatus === 'failed' && 'Failed'}
-                    {project.buildStatus === 'pending' && 'Pending'}
-                    {!project.buildStatus && 'Unknown'}
-                  </div>
-                </div>
-              </div>
-              
-              {project.buildStatus === 'success' && (
-                <div className="stat-card">
-                  <div className="stat-icon">🌐</div>
-                  <div className="stat-content">
-                    <div className="stat-label">Live URL</div>
-                    <a 
-                      href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="stat-link"
-                    >
-                      View Site
-                    </a>
-                  </div>
-                </div>
-              )}
-
-              {project.buildStatus === 'failed' && project.buildError && (
-                <div className="stat-card error-card">
-                  <div className="stat-icon">⚠️</div>
-                  <div className="stat-content">
-                    <div className="stat-label">Build Error</div>
-                    <div className="stat-error">{project.buildError}</div>
-                  </div>
-                </div>
-              )}
-
-              <div className="stat-card">
-                <div className="stat-icon">📦</div>
-                <div className="stat-content">
-                  <div className="stat-label">Project ID</div>
-                  <div className="stat-value-mono">{project.projectId}</div>
-                </div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-icon">🔀</div>
-                <div className="stat-content">
-                  <div className="stat-label">Branch</div>
-                  <div className="stat-value">{project.defaultBranch}</div>
-                </div>
-              </div>
+      <div className="dashboard-container">
+        {/* Project Header */}
+        <div className="project-header">
+          <div className="project-header-content">
+            <div className="project-icon">
+              {projectName.charAt(0).toUpperCase()}
             </div>
-
-            <div className="project-details-section">
-              <h2>Project Information</h2>
-              <div className="details-list">
-                <div className="detail-row">
-                  <span className="detail-label">Repository</span>
-                  <a 
-                    href={project.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="detail-value detail-link"
-                  >
-                    {project.url}
-                  </a>
-                </div>
-                <div className="detail-row">
-                  <span className="detail-label">Default Branch</span>
-                  <span className="detail-value">{project.defaultBranch}</span>
-                </div>
-                <div className="detail-row">
-                  <span className="detail-label">Last Commit SHA</span>
-                  <span className="detail-value detail-value-mono">{project.commitSha}</span>
-                </div>
-                {project.createdAt && (
-                  <div className="detail-row">
-                    <span className="detail-label">Created</span>
-                    <span className="detail-value">{new Date(project.createdAt).toLocaleString()}</span>
-                  </div>
-                )}
-                {project.updatedAt && (
-                  <div className="detail-row">
-                    <span className="detail-label">Last Updated</span>
-                    <span className="detail-value">{new Date(project.updatedAt).toLocaleString()}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="actions-section">
-              <h2>Quick Actions</h2>
-              <div className="action-buttons">
-                {project.buildStatus === 'success' ? (
-                  <a 
-                    href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="action-btn action-btn-primary"
-                  >
-                    🌐 Visit Site
-                  </a>
-                ) : (
-                  <button
-                    className="action-btn action-btn-primary"
-                    disabled
-                    title="Build must complete successfully first"
-                  >
-                    🌐 Visit Site
-                  </button>
-                )}
-                <button 
-                  onClick={handleRedeploy}
-                  className="action-btn action-btn-secondary"
-                >
-                  🔄 Redeploy
-                </button>
-                <a 
-                  href={project.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="action-btn action-btn-secondary"
-                >
-                  📂 View Repository
-                </a>
+            <div className="project-info">
+              <h1 className="project-name">{projectName}</h1>
+              <div className="project-meta">
+                <span className={`status-pill status-${statusConfig.color}`}>
+                  <span className="status-dot"></span>
+                  {statusConfig.label}
+                </span>
+                <span className="project-branch">{project.defaultBranch}</span>
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {activeTab === 'deployments' && (
-          <div className="deployments-section">
-            <h2>Build Logs</h2>
-            
-            {logsLoading ? (
-              <div className="loading">Loading build logs...</div>
-            ) : buildLogs.length === 0 ? (
-              <div className="empty-state">
-                <p>No build logs available yet</p>
-                <small>Build logs will appear here after deployments</small>
-              </div>
-            ) : (
-              <div className="logs-container">
-                <div className="logs-list">
-                  {buildLogs.map((log) => (
-                    <div 
-                      key={log.fileName} 
-                      className={`log-item ${selectedLog === log.fileName ? 'active' : ''}`}
-                      onClick={() => fetchLogContent(log.fileName)}
-                    >
-                      <div className={`log-status log-${log.status}`}>●</div>
-                      <div className="log-content">
-                        <div className="log-header">
-                          <strong>{log.status === 'success' ? 'Build Success' : 'Build Failed'}</strong>
-                          <span className="log-size">{(log.size / 1024).toFixed(2)} KB</span>
-                        </div>
-                        <div className="log-meta">
-                          {new Date(log.timestamp).toLocaleString()}
+        {/* Tabs Navigation */}
+        <div className="tabs-container">
+          <div className="tabs-nav">
+            <button 
+              className={`tab ${activeTab === 'overview' ? 'active' : ''}`}
+              onClick={() => setActiveTab('overview')}
+            >
+              Overview
+            </button>
+            <button 
+              className={`tab ${activeTab === 'deployments' ? 'active' : ''}`}
+              onClick={() => setActiveTab('deployments')}
+            >
+              Deployments
+            </button>
+            <button 
+              className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveTab('settings')}
+            >
+              Settings
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <div className="tab-content">
+          {activeTab === 'overview' && (
+            <div className="overview-layout">
+              {/* Main Column */}
+              <div className="main-column">
+                {/* Deployment Status Card */}
+                <div className="card">
+                  <div className="card-header">
+                    <h2 className="card-title">Deployment Status</h2>
+                  </div>
+                  <div className="card-content">
+                    {project.buildStatus === 'success' && (
+                      <div className="deployment-success">
+                        <div className="deployment-status-icon success"></div>
+                        <div>
+                          <p className="deployment-message">Your project is live and running</p>
+                          <a 
+                            href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="deployment-url"
+                          >
+                            {BUILD_SERVICE_URL.replace(/^https?:\/\//, '')}/{project.projectId}
+                          </a>
                         </div>
                       </div>
-                      <div className="log-actions">
-                        <span className="view-icon">→</span>
+                    )}
+                    {project.buildStatus === 'building' && (
+                      <div className="deployment-building">
+                        <div className="deployment-status-icon building"></div>
+                        <div>
+                          <p className="deployment-message">Build in progress...</p>
+                          <p className="deployment-subtitle">This may take a few minutes</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )}
+                    {project.buildStatus === 'failed' && (
+                      <div className="deployment-failed">
+                        <div className="deployment-status-icon failed"></div>
+                        <div>
+                          <p className="deployment-message">Deployment failed</p>
+                          {project.buildError && (
+                            <div className="error-details">{project.buildError}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {project.buildStatus === 'pending' && (
+                      <div className="deployment-pending">
+                        <div className="deployment-status-icon pending"></div>
+                        <div>
+                          <p className="deployment-message">Deployment queued</p>
+                          <p className="deployment-subtitle">Waiting to start build</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {selectedLog && (
-                  <div className="log-viewer">
-                    <div className="log-viewer-header">
-                      <h3>Build Log</h3>
-                      <button 
-                        className="close-log-btn"
-                        onClick={() => setSelectedLog(null)}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <div className="log-viewer-content">
-                      {logContentLoading ? (
-                        <div className="loading">Loading log content...</div>
-                      ) : (
-                        <pre className="log-text">{logContent}</pre>
+                {/* Project Details Card */}
+                <div className="card">
+                  <div className="card-header">
+                    <h2 className="card-title">Project Details</h2>
+                  </div>
+                  <div className="card-content">
+                    <div className="info-grid">
+                      <div className="info-item">
+                        <span className="info-label">Repository</span>
+                        <a 
+                          href={project.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="info-value info-link"
+                        >
+                          {project.url.replace(/^https?:\/\/github\.com\//, '')}
+                        </a>
+                      </div>
+                      <div className="info-item">
+                        <span className="info-label">Branch</span>
+                        <span className="info-value">{project.defaultBranch}</span>
+                      </div>
+                      <div className="info-item">
+                        <span className="info-label">Commit SHA</span>
+                        <span className="info-value info-mono">{project.commitSha.substring(0, 7)}</span>
+                      </div>
+                      <div className="info-item">
+                        <span className="info-label">Project ID</span>
+                        <span className="info-value info-mono">{project.projectId}</span>
+                      </div>
+                      {project.createdAt && (
+                        <div className="info-item">
+                          <span className="info-label">Created</span>
+                          <span className="info-value">{new Date(project.createdAt).toLocaleDateString()}</span>
+                        </div>
+                      )}
+                      {project.lastBuildAt && (
+                        <div className="info-item">
+                          <span className="info-label">Last Build</span>
+                          <span className="info-value">{new Date(project.lastBuildAt).toLocaleString()}</span>
+                        </div>
                       )}
                     </div>
                   </div>
+                </div>
+              </div>
+
+              {/* Sidebar */}
+              <div className="sidebar-column">
+                {/* Quick Actions Card */}
+                <div className="card">
+                  <div className="card-header">
+                    <h2 className="card-title">Actions</h2>
+                  </div>
+                  <div className="card-content">
+                    <div className="action-list">
+                      <button 
+                        onClick={handleRedeploy}
+                        className="action-item"
+                      >
+                        <div className="action-icon">↻</div>
+                        <div className="action-details">
+                          <div className="action-name">Redeploy</div>
+                          <div className="action-desc">Trigger new deployment</div>
+                        </div>
+                      </button>
+                      <a 
+                        href={project.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="action-item"
+                      >
+                        <div className="action-icon">↗</div>
+                        <div className="action-details">
+                          <div className="action-name">View Repository</div>
+                          <div className="action-desc">Open in GitHub</div>
+                        </div>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+        {activeTab === 'deployments' && (
+          <div className="deployments-layout">
+            <div className="card card-full">
+              <div className="card-header">
+                <h2 className="card-title">Build History</h2>
+              </div>
+              <div className="card-content">
+                {logsLoading ? (
+                  <div className="loading-state">
+                    <div className="spinner"></div>
+                    <p>Loading build logs...</p>
+                  </div>
+                ) : buildLogs.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">◎</div>
+                    <p className="empty-title">No deployments yet</p>
+                    <p className="empty-text">Build logs will appear here after your first deployment</p>
+                  </div>
+                ) : (
+                  <div className="logs-layout">
+                    <div className="logs-sidebar">
+                      {buildLogs.map((log) => (
+                        <div 
+                          key={log.fileName} 
+                          className={`log-card ${selectedLog === log.fileName ? 'selected' : ''}`}
+                          onClick={() => fetchLogContent(log.fileName)}
+                        >
+                          <div className={`log-indicator log-${log.status}`}></div>
+                          <div className="log-info">
+                            <div className="log-title">
+                              {log.status === 'success' ? 'Successful Build' : 'Failed Build'}
+                            </div>
+                            <div className="log-time">
+                              {new Date(log.timestamp).toLocaleString()}
+                            </div>
+                            <div className="log-size">{(log.size / 1024).toFixed(2)} KB</div>
+                          </div>
+                          <div className="log-arrow">›</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {selectedLog && (
+                      <div className="log-display">
+                        <div className="log-display-header">
+                          <h3>Build Output</h3>
+                          <button 
+                            className="log-close"
+                            onClick={() => setSelectedLog(null)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="log-display-content">
+                          {logContentLoading ? (
+                            <div className="loading-state">
+                              <div className="spinner"></div>
+                              <p>Loading log content...</p>
+                            </div>
+                          ) : (
+                            <pre className="log-output">{logContent}</pre>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
+            </div>
           </div>
         )}
 
         {activeTab === 'settings' && (
-          <div className="settings-section">
-            <h2>Project Settings</h2>
-            <div className="settings-group">
-              <h3>General</h3>
-              <div className="setting-item">
-                <label>Project ID</label>
-                <input 
-                  type="text" 
-                  value={project.projectId} 
-                  readOnly 
-                  className="setting-input"
-                />
-                <small>This is your unique project identifier</small>
+          <div className="settings-layout">
+            <div className="card">
+              <div className="card-header">
+                <h2 className="card-title">General Settings</h2>
               </div>
-              <div className="setting-item">
-                <label>Default Branch</label>
-                <input 
-                  type="text" 
-                  value={project.defaultBranch} 
-                  readOnly 
-                  className="setting-input"
-                />
-                <small>The branch used for deployments</small>
+              <div className="card-content">
+                <div className="settings-list">
+                  <div className="setting-field">
+                    <label className="setting-label">Project ID</label>
+                    <input 
+                      type="text" 
+                      value={project.projectId} 
+                      readOnly 
+                      className="setting-input"
+                    />
+                    <p className="setting-help">Unique identifier for this project</p>
+                  </div>
+                  <div className="setting-field">
+                    <label className="setting-label">Default Branch</label>
+                    <input 
+                      type="text" 
+                      value={project.defaultBranch} 
+                      readOnly 
+                      className="setting-input"
+                    />
+                    <p className="setting-help">Branch used for automatic deployments</p>
+                  </div>
+                  <div className="setting-field">
+                    <label className="setting-label">Repository URL</label>
+                    <input 
+                      type="text" 
+                      value={project.url} 
+                      readOnly 
+                      className="setting-input"
+                    />
+                    <p className="setting-help">Source repository location</p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="settings-group danger-zone">
-              <h3>Danger Zone</h3>
-              <div className="setting-item">
-                <div className="danger-setting">
-                  <div>
-                    <strong>Delete Project</strong>
-                    <p>Once you delete a project, there is no going back. Please be certain.</p>
+            <div className="card card-danger">
+              <div className="card-header">
+                <h2 className="card-title">Danger Zone</h2>
+              </div>
+              <div className="card-content">
+                <div className="danger-item">
+                  <div className="danger-info">
+                    <h3 className="danger-title">Delete Project</h3>
+                    <p className="danger-text">
+                      Permanently remove this project and all its deployments. This action cannot be undone.
+                    </p>
                   </div>
                   <button 
                     onClick={() => {
                       if (window.confirm("Are you sure you want to delete this project? This action cannot be undone.")) {
-                        // Navigate to projects page to handle deletion there
                         navigate('/projects');
                       }
                     }}
-                    className="danger-btn"
+                    className="danger-button"
                   >
                     Delete Project
                   </button>
@@ -503,6 +578,7 @@ function Dashboard() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

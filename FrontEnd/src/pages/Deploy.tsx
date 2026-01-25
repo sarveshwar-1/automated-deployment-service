@@ -11,6 +11,19 @@ interface DeployResponse {
   buildStatus?: string;
 }
 
+interface GitHubRepo {
+  id: number;
+  name: string;
+  fullName: string;
+  description: string | null;
+  url: string;
+  cloneUrl: string;
+  private: boolean;
+  defaultBranch: string;
+  language: string | null;
+  updatedAt: string;
+}
+
 function Deploy() {
   const [repoUrl, setRepoUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,6 +32,75 @@ function Deploy() {
   const [projectDetails, setProjectDetails] = useState<DeployResponse | null>(
     null
   );
+  
+  // GitHub repos state
+  const [showRepos, setShowRepos] = useState(false);
+  const [repos, setRepos] = useState<GitHubRepo[]>([]);
+  const [loadingRepos, setLoadingRepos] = useState(false);
+  const [reposError, setReposError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const fetchGitHubRepos = async () => {
+    setLoadingRepos(true);
+    setReposError("");
+    setShowRepos(true);
+    
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setReposError("No authentication token found");
+        setLoadingRepos(false);
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/github/repos`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.repos) {
+        setRepos(data.repos);
+      } else {
+        setReposError(data.error || "Failed to fetch repositories");
+      }
+    } catch (err) {
+      console.error("Error fetching repos:", err);
+      setReposError("Failed to fetch repositories. Please try again.");
+    } finally {
+      setLoadingRepos(false);
+    }
+  };
+
+  const handleRepoSelect = (repo: GitHubRepo) => {
+    setRepoUrl(repo.cloneUrl);
+    setShowRepos(false);
+  };
+
+  const handleCloseModal = () => {
+    setShowRepos(false);
+    setReposError("");
+    setSearchQuery("");
+  };
+
+  // Filter repositories based on search query
+  const filteredRepos = repos.filter((repo) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      repo.name.toLowerCase().includes(query) ||
+      repo.fullName.toLowerCase().includes(query) ||
+      (repo.description && repo.description.toLowerCase().includes(query)) ||
+      (repo.language && repo.language.toLowerCase().includes(query))
+    );
+  });
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      handleCloseModal();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +173,16 @@ function Deploy() {
           </button>
         </form>
 
+        <div className="divider">OR</div>
+
+        <button
+          onClick={fetchGitHubRepos}
+          disabled={loadingRepos}
+          className="github-repos-btn"
+        >
+          {loadingRepos ? "Loading..." : "Choose a repository from your GitHub account"}
+        </button>
+
         {projectDetails && (
           <div className="project-details">
             <h3>Build Started!</h3>
@@ -100,6 +192,83 @@ function Deploy() {
           </div>
         )}
       </div>
+
+      {/* GitHub Repos Modal */}
+      {showRepos && (
+        <div className="modal-backdrop" onClick={handleBackdropClick}>
+          <div className="repos-modal">
+            <div className="modal-header">
+              <h3>Select a Repository</h3>
+              <button onClick={handleCloseModal} className="close-modal-btn">
+                ✕
+              </button>
+            </div>
+
+            {!loadingRepos && repos.length > 0 && (
+              <div className="search-container">
+                <input
+                  type="text"
+                  placeholder="Search repositories by name, description, or language..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="repo-search-input"
+                />
+                <span className="search-icon">🔍</span>
+              </div>
+            )}
+
+            {loadingRepos ? (
+              <div className="modal-loading">
+                <div className="loading-spinner"></div>
+                <p>Loading repositories...</p>
+              </div>
+            ) : reposError ? (
+              <div className="modal-error">
+                <p className="error-message">{reposError}</p>
+              </div>
+            ) : filteredRepos.length > 0 ? (
+              <div className="repos-grid">
+                {filteredRepos.map((repo) => (
+                  <div key={repo.id} className="repo-card">
+                    <div className="repo-header">
+                      <h4>{repo.name}</h4>
+                      {repo.private && <span className="private-badge">Private</span>}
+                    </div>
+                    {repo.description && (
+                      <p className="repo-description">{repo.description}</p>
+                    )}
+                    <div className="repo-meta">
+                      {repo.language && (
+                        <span className="repo-language">{repo.language}</span>
+                      )}
+                      <span className="repo-updated">
+                        Updated {new Date(repo.updatedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => handleRepoSelect(repo)}
+                      className="select-repo-btn"
+                    >
+                      Select
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : searchQuery ? (
+              <div className="modal-empty">
+                <p>No repositories match "{searchQuery}"</p>
+                <button onClick={() => setSearchQuery("")} className="clear-search-btn">
+                  Clear search
+                </button>
+              </div>
+            ) : (
+              <div className="modal-empty">
+                <p>No repositories found</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

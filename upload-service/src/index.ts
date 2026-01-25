@@ -244,6 +244,142 @@ app.post('/signin', async (req: Request, res: Response) => {
 });
 
 /**
+ * GitHub OAuth - Exchange authorization code for access token
+ * 
+ * Flow:
+ * 1. Frontend redirects user to GitHub OAuth page
+ * 2. User authorizes
+ * 3. GitHub redirects back with ?code=...
+ * 4. Frontend sends code to this endpoint
+ * 5. We exchange code for GitHub access token
+ * 6. Fetch user info from GitHub
+ * 7. Create/update user in our DB
+ * 8. Return our JWT tokens
+ */
+app.post('/auth/github', async (req: Request, res: Response) => {
+  console.log('🐙 GitHub OAuth request');
+  
+  const { code } = req.body;
+  
+  if (!code) {
+    res.status(400).json({ error: "Authorization code required" });
+    return;
+  }
+
+  try {
+    // Step 1: Exchange code for GitHub access token
+    const tokenResponse = await axios.post(
+      'https://github.com/login/oauth/access_token',
+      {
+        client_id: process.env.GITHUB_CLIENT_ID,
+        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        code: code
+      },
+      {
+        headers: { Accept: 'application/json' }
+      }
+    );
+
+    const { access_token: githubAccessToken } = tokenResponse.data;
+
+    if (!githubAccessToken) {
+      res.status(400).json({ error: "Failed to get access token from GitHub" });
+      return;
+    }
+
+    // Step 2: Fetch user info from GitHub
+    const userResponse = await axios.get('https://api.github.com/user', {
+      headers: { Authorization: `Bearer ${githubAccessToken}` }
+    });
+
+    const githubUser = userResponse.data;
+
+    // Step 3: Get user's email (might need separate call)
+    let email = githubUser.email;
+    if (!email) {
+      const emailResponse = await axios.get('https://api.github.com/user/emails', {
+        headers: { Authorization: `Bearer ${githubAccessToken}` }
+      });
+      const primaryEmail = emailResponse.data.find((e: any) => e.primary);
+      email = primaryEmail?.email || emailResponse.data[0]?.email;
+    }
+
+    if (!email) {
+      res.status(400).json({ error: "Could not retrieve email from GitHub" });
+      return;
+    }
+
+    // Step 4: Create or update user in our database
+    let user = await UserModel.findOne({ githubId: githubUser.id.toString() });
+
+    if (!user) {
+      // Check if user exists with same email (merge accounts)
+      user = await UserModel.findOne({ email });
+      
+      if (user) {
+        // Update existing user with GitHub info
+        user.githubId = githubUser.id.toString();
+        user.githubUsername = githubUser.login;
+        user.githubAccessToken = githubAccessToken; // TODO: Encrypt this
+        user.authProvider = 'github';
+        await user.save();
+      } else {
+        // Create new user
+        user = await UserModel.create({
+          email,
+          name: githubUser.name || githubUser.login,
+          githubId: githubUser.id.toString(),
+          githubUsername: githubUser.login,
+          githubAccessToken: githubAccessToken, // TODO: Encrypt this
+          authProvider: 'github',
+          role: 'developer'
+        });
+      }
+    } else {
+      // Update existing GitHub user's token
+      user.githubAccessToken = githubAccessToken;
+      user.lastSuccessfulLogin = new Date();
+      await user.save();
+    }
+
+    // Step 5: Generate our JWT tokens
+    const accessToken = signAccessToken(user._id.toString(), user.role);
+    const jti = uuidv4();
+    const refreshToken = signRefreshToken(user._id.toString(), user.role, jti);
+
+    // Store refresh token
+    await RefreshTokenModel.create({
+      userId: user._id,
+      token: refreshToken,
+      jti: jti,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip
+    });
+
+    res.json({
+      message: "GitHub authentication successful",
+      accessToken,
+      refreshToken,
+      expiresIn: 900, // 15 minutes
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        githubUsername: user.githubUsername
+      }
+    });
+  } catch (error: any) {
+    console.error('GitHub OAuth error:', error.response?.data || error.message);
+    res.status(500).json({ 
+      error: "GitHub authentication failed",
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+/**
  * Token Refresh - Exchange refresh token for new access token
  * Similar to Kerberos TGS (Ticket Granting Service)
  */
@@ -320,6 +456,94 @@ app.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) => {
   }
 
   res.json({ message: "Logged out successfully" });
+});
+
+// ===================
+// GITHUB INTEGRATION
+// ===================
+
+/**
+ * Fetch user's GitHub repositories
+ * 
+ * Uses the stored GitHub access token to fetch repositories.
+ * Returns both public and private repos based on OAuth scope.
+ */
+app.get('/github/repos', authMiddleware, async (req: AuthRequest, res: Response) => {
+  console.log('🐙 Fetching GitHub repositories for user:', req.id);
+  
+  try {
+    // Get user from database
+    const user = await UserModel.findById(req.id);
+    
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    // Check if user has GitHub linked
+    if (!user.githubAccessToken) {
+      res.status(400).json({ 
+        error: "GitHub account not linked",
+        message: "Please sign in with GitHub to link your account"
+      });
+      return;
+    }
+
+    // Fetch repositories from GitHub API
+    const response = await axios.get('https://api.github.com/user/repos', {
+      headers: {
+        Authorization: `Bearer ${user.githubAccessToken}`,
+        Accept: 'application/vnd.github.v3+json'
+      },
+      params: {
+        sort: 'updated',        // Sort by last updated
+        per_page: 100,          // Max per page
+        affiliation: 'owner'    // Only repos user owns (not orgs)
+      }
+    });
+
+    // Transform data to include only what we need
+    const repos = response.data.map((repo: any) => ({
+      id: repo.id,
+      name: repo.name,
+      fullName: repo.full_name,
+      description: repo.description,
+      url: repo.html_url,
+      cloneUrl: repo.clone_url,
+      sshUrl: repo.ssh_url,
+      private: repo.private,
+      defaultBranch: repo.default_branch,
+      language: repo.language,
+      size: repo.size,
+      stargazers: repo.stargazers_count,
+      forks: repo.forks_count,
+      updatedAt: repo.updated_at,
+      pushedAt: repo.pushed_at
+    }));
+
+    res.json({
+      repos,
+      total: repos.length,
+      githubUsername: user.githubUsername
+    });
+
+  } catch (error: any) {
+    console.error('GitHub API error:', error.response?.data || error.message);
+    
+    // Handle token expiration or revocation
+    if (error.response?.status === 401) {
+      res.status(401).json({ 
+        error: "GitHub token expired or revoked",
+        message: "Please re-authenticate with GitHub"
+      });
+      return;
+    }
+
+    res.status(500).json({ 
+      error: "Failed to fetch repositories",
+      details: error.response?.data?.message || error.message
+    });
+  }
 });
 
 // ===================
@@ -540,10 +764,23 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), async (
   const repoMeta = repoUrl.replace('.git', '').replace('https://github.com/', 'https://api.github.com/repos/');
 
   try {
+    // Get user's GitHub access token if available (for authenticated requests - 5000/hour vs 60/hour)
+    const user = await UserModel.findById(userId);
+    const githubToken = user?.githubAccessToken;
+    
+    // Setup headers for authenticated GitHub API requests
+    const headers: any = {};
+    if (githubToken) {
+      headers['Authorization'] = `Bearer ${githubToken}`;
+      console.log('🔑 Using authenticated GitHub API (5000 req/hour)');
+    } else {
+      console.log('⚠️  Using unauthenticated GitHub API (60 req/hour)');
+    }
+
     // Get repository info from GitHub
-    const response = await axios.get(repoMeta);
+    const response = await axios.get(repoMeta, { headers });
     const defaultBranch = response.data.default_branch;
-    const response2 = await axios.get(`${repoMeta}/branches/${defaultBranch}`);
+    const response2 = await axios.get(`${repoMeta}/branches/${defaultBranch}`, { headers });
     const commitSha = response2.data.commit.sha;
 
     console.log('📌 Default branch:', defaultBranch, '| Commit:', commitSha);
@@ -555,6 +792,7 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), async (
       userId: userId,
       commitSha: commitSha,
       defaultBranch: defaultBranch,
+      githubToken: githubToken, // Pass token for authenticated git operations
     };
 
     await deploymentQueue.add('deploy', jobData, {

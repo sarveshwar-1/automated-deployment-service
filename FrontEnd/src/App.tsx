@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useState, useEffect } from 'react';
 import SignUp from './pages/SignUp';
 import SignIn from './pages/SignIn';
+import GitHubCallback from './pages/GitHubCallback';
 import Deploy from './pages/Deploy';
 import ViewProjects from './pages/ViewProjects';
 import Dashboard from './pages/Dashboard';
@@ -51,6 +52,10 @@ function App() {
           <Route 
             path="/signin" 
             element={!isAuthenticated ? <SignIn setIsAuthenticated={setIsAuthenticated} /> : <Navigate to="/deploy" />} 
+          />
+          <Route 
+            path="/auth/github/callback" 
+            element={<GitHubCallback setIsAuthenticated={setIsAuthenticated} />} 
           />
           <Route 
             path="/deploy" 
