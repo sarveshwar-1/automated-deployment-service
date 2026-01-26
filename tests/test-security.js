@@ -7,7 +7,7 @@
  * Or:  npx ts-node test-security.ts
  */
 
-const API_URL = process.env.API_URL || 'http://172.17.9.74:3002';
+const API_URL = process.env.API_URL || 'http://localhost:3002';
 
 // Colors for terminal output
 const colors = {

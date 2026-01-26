@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@types/helmet':
+        specifier: ^0.0.48
+        version: 0.0.48
       axios:
         specifier: ^1.13.2
         version: 1.13.2
@@ -40,7 +43,7 @@ importers:
         version: 8.0.6
       mongoose:
         specifier: ^9.0.2
-        version: 9.1.1
+        version: 9.0.2
       simple-git:
         specifier: ^3.30.0
         version: 3.30.0
@@ -163,6 +166,9 @@ packages:
 
   '@types/express@5.0.6':
     resolution: {integrity: sha512-sKYVuV7Sv9fbPIt/442koC7+IIwK5olP1KWeD88e/idgoJqDm3JV/YUiPwkoKK92ylff2MGxSz1CSjsXelx0YA==}
+
+  '@types/helmet@0.0.48':
+    resolution: {integrity: sha512-C7MpnvSDrunS1q2Oy1VWCY7CDWHozqSnM8P4tFeRTuzwqni+PYOjEredwcqWG+kLpYcgLsgcY3orHB54gbx2Jw==}
 
   '@types/http-errors@2.0.5':
     resolution: {integrity: sha512-r8Tayk8HJnX0FztbZN7oVqGccWgw98T/0neJphO91KkmOzug1KkofZURD4UaD5uH8AqcFLfdPErnBod0u71/qg==}
@@ -633,8 +639,8 @@ packages:
       socks:
         optional: true
 
-  mongoose@9.1.1:
-    resolution: {integrity: sha512-/CgKSAmjzgIj4o1FyWZIpQ2rmUQlhalwWd4l/Ht3XUVWscHRHev1TIwKz1ADNC5tHHyOQEaUDkEh0jI91c4Ydw==}
+  mongoose@9.0.2:
+    resolution: {integrity: sha512-+GCaqwE+X//yN9eo2M2L/n+mVti9J6vH5iQKbhD+2AArZd5iaZqK/DkmkE4S6/iYYMyVQPTXsRk7jyVOYEtJzA==}
     engines: {node: '>=20.19.0'}
 
   mpath@0.9.0:
@@ -1007,6 +1013,10 @@ snapshots:
       '@types/body-parser': 1.19.6
       '@types/express-serve-static-core': 5.1.0
       '@types/serve-static': 2.2.0
+
+  '@types/helmet@0.0.48':
+    dependencies:
+      '@types/express': 5.0.6
 
   '@types/http-errors@2.0.5': {}
 
@@ -1489,7 +1499,7 @@ snapshots:
       bson: 7.0.0
       mongodb-connection-string-url: 7.0.0
 
-  mongoose@9.1.1:
+  mongoose@9.0.2:
     dependencies:
       kareem: 3.0.0
       mongodb: 7.0.0

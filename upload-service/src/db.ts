@@ -11,7 +11,18 @@ const ObjectId = mongoose.ObjectId;
 const userSchema = new Schema({
   email: { type: String, unique: true, required: true },
   name: { type: String, required: true },
-  password: { type: String, required: true },
+  password: { type: String, required: false }, // Optional for GitHub OAuth users
+  
+  // GitHub OAuth fields
+  githubId: { type: String, unique: true, sparse: true }, // GitHub user ID
+  githubUsername: { type: String }, // GitHub username
+  githubAccessToken: { type: String }, // Encrypted token for API access
+  authProvider: { 
+    type: String, 
+    enum: ['local', 'github'], 
+    default: 'local' 
+  },
+  
   // RBAC - Role-based access control
   role: {
     type: String,
@@ -43,6 +54,14 @@ const projectSchema = new Schema({
   buildCommand: { type: String, default: null }, // Custom build command override
   outputDir: { type: String, default: null }, // Custom output directory
   envVars: { type: Map, of: String, default: {} }, // Build-time environment variables
+  // Build status tracking
+  buildStatus: { 
+    type: String, 
+    enum: ['pending', 'building', 'success', 'failed'], 
+    default: 'pending' 
+  },
+  buildError: { type: String, default: null },
+  lastBuildAt: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -17,10 +17,10 @@ WORKDIR /app
 RUN npm install -g pnpm typescript vite @vitejs/plugin-react
 
 # Copy package files
-COPY --chown=appuser:appgroup package.json pnpm-lock.yaml ./
+COPY --chown=appuser:appgroup package.json ./
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile
+RUN pnpm install
 
 # Copy TypeScript config and source code
 COPY --chown=appuser:appgroup tsconfig.json ./
@@ -42,5 +42,5 @@ USER appuser
 # Expose port for static file server
 EXPOSE 3001
 
-# Default command
-CMD ["node", "dist/index.js"]
+# Default command - run startup script which handles setup + service start
+CMD ["node", "dist/startup.js"]

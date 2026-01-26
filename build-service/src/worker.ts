@@ -7,6 +7,7 @@ import { promisify } from "util";
 import { minioClient, BUCKETS } from "./minio";
 import { getAllFiles, getContentType } from "./utils";
 import { client } from "./kafka";
+import mongoose from "mongoose";
 
 const execAsync = promisify(exec);
 const producer = client.producer();
@@ -15,9 +16,34 @@ const producer = client.producer();
   await producer.connect();
 })();
 
+// MongoDB connection
+const MONGO_URI = process.env.MONGODB_URI || "mongodb://mongo:27017/automated-deployment";
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("✅ Build-service connected to MongoDB"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
+
+// Project schema (same as upload-service)
+const ProjectSchema = new mongoose.Schema({
+  url: String,
+  projectId: String,
+  userId: mongoose.Schema.Types.ObjectId,
+  commitSha: String,
+  defaultBranch: String,
+  buildStatus: { 
+    type: String, 
+    enum: ['pending', 'building', 'success', 'failed'], 
+    default: 'pending' 
+  },
+  buildError: { type: String, default: null },
+  lastBuildAt: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const ProjectModel = mongoose.model('projects', ProjectSchema);
+
 // Redis connection for queue
 const redis = new Redis({
-  host: process.env.REDIS_HOST || "172.17.9.74",
+  host: process.env.REDIS_HOST || "localhost",
   port: parseInt(process.env.REDIS_PORT || "6380"),
   maxRetriesPerRequest: null,
 });
@@ -414,6 +440,46 @@ async function uploadToMinio(
   return uploadedCount;
 }
 
+// Helper function to save build logs to MinIO
+async function saveBuildLogs(
+  projectId: string,
+  logs: string,
+  status: 'success' | 'failed'
+): Promise<string> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const logFileName = `${timestamp}-${status}.log`;
+  const objectKey = `${projectId}/${logFileName}`;
+  const tempLogPath = path.join('/tmp', `${projectId}-${timestamp}.log`);
+
+  try {
+    // Write logs to temp file
+    fs.writeFileSync(tempLogPath, logs, 'utf-8');
+    
+    console.log(`📝 Saving build logs to MinIO: ${objectKey}`);
+    
+    // Upload to MinIO
+    await minioClient.fPutObject(BUCKETS.BUILD_LOGS, objectKey, tempLogPath, {
+      'Content-Type': 'text/plain',
+      'X-Amz-Meta-Project-Id': projectId,
+      'X-Amz-Meta-Status': status,
+      'X-Amz-Meta-Timestamp': timestamp,
+    });
+    
+    // Clean up temp file
+    fs.unlinkSync(tempLogPath);
+    
+    console.log(`✅ Build logs saved: ${objectKey}`);
+    return objectKey;
+  } catch (err: any) {
+    console.error(`❌ Failed to save build logs: ${err.message}`);
+    // Clean up temp file if it exists
+    if (fs.existsSync(tempLogPath)) {
+      fs.unlinkSync(tempLogPath);
+    }
+    throw err;
+  }
+}
+
 // Build Worker: Listens for build jobs in the queue
 const buildWorker = new Worker(
   "builds",
@@ -423,6 +489,13 @@ const buildWorker = new Worker(
 
     const { projectId, deploymentType, buildCommand, outputDir, envVars } = job.data;
     const buildPath = path.join("/tmp", `build-${projectId}`);
+    
+    // Initialize log collection
+    const buildLogs: string[] = [];
+    const startTime = new Date();
+    buildLogs.push(`=== Build Started at ${startTime.toISOString()} ===\n`);
+    buildLogs.push(`Project ID: ${projectId}\n`);
+    buildLogs.push(`Job ID: ${job.id}\n\n`);
 
     console.log(`📋 Deployment type: ${deploymentType || 'vite-react-ts'}`);
     if (buildCommand) console.log(`🔧 Custom build command: ${buildCommand}`);
@@ -435,13 +508,17 @@ const buildWorker = new Worker(
       // Step 1: Clean up any existing build directory
       if (fs.existsSync(buildPath)) {
         console.log("🧹 Cleaning up existing build directory...");
+        buildLogs.push("🧹 Cleaning up existing build directory...\n");
         fs.rmSync(buildPath, { recursive: true, force: true });
       }
 
       // Step 2: Download source code from MinIO
+      buildLogs.push("\n📥 Downloading source code from MinIO...\n");
       await downloadFromMinio(projectId, buildPath);
+      buildLogs.push("✅ Source code downloaded successfully\n");
 
       // Step 3: Run build commands with deployment type
+      buildLogs.push("\n🔨 Running build commands...\n");
       const buildResult = await runBuildCommands(
         buildPath,
         deploymentType || 'vite-react-ts',
@@ -449,11 +526,28 @@ const buildWorker = new Worker(
         envVars || {}
       );
       const isStatic = buildResult.isStatic;
+      
+      // Capture build output
+      if (buildResult.stdout) {
+        buildLogs.push("\n--- Build Output (stdout) ---\n");
+        buildLogs.push(buildResult.stdout);
+        buildLogs.push("\n");
+      }
+      if (buildResult.stderr) {
+        buildLogs.push("\n--- Build Warnings/Errors (stderr) ---\n");
+        buildLogs.push(buildResult.stderr);
+        buildLogs.push("\n");
+      }
+      
+      buildLogs.push(isStatic ? "✅ Static site (no build required)\n" : "✅ Build completed successfully\n");
 
       // Step 4: Find and upload build output
+      
+      buildLogs.push("\n📦 Finding build output directory...\n");
       const outputDirectory = isStatic
         ? buildPath
         : findBuildOutputDir(buildPath, deploymentType || 'vite-react-ts', outputDir || null);
+      buildLogs.push(`✅ Found output directory: ${path.basename(outputDirectory)}\n`);
 
       // Check if index.html exists and has content
       const indexPath = path.join(outputDirectory, "index.html");
@@ -465,17 +559,86 @@ const buildWorker = new Worker(
         throw new Error("Built index.html is empty");
       }
       console.log(`✅ Found valid index.html (${indexContent.length} characters)`);
+      buildLogs.push(`✅ Found valid index.html (${indexContent.length} characters)\n`);
 
+      buildLogs.push("\n📤 Uploading built files to MinIO...\n");
       const uploadedCount = await uploadToMinio(projectId, outputDirectory);
+      buildLogs.push(`✅ Uploaded ${uploadedCount} files successfully\n`);
 
       // Step 5: Clean up
       console.log("🧹 Cleaning up build directory...");
+      buildLogs.push("\n🧹 Cleaning up build directory...\n");
       fs.rmSync(buildPath, { recursive: true, force: true });
 
+      
+      const endTime = new Date();
+      const duration = endTime.getTime() - startTime.getTime();
+      buildLogs.push(`\n=== Build Completed Successfully at ${endTime.toISOString()} ===\n`);
+      buildLogs.push(`Total Duration: ${(duration / 1000).toFixed(2)}s\n`);
+      
+      // Save logs to MinIO
+      const logPath = await saveBuildLogs(projectId, buildLogs.join(''), 'success');
+
+      // Update MongoDB: Build succeeded
+      try {
+        const updateResult = await ProjectModel.findOneAndUpdate(
+          { projectId },
+          { 
+            buildStatus: 'success',
+            buildError: null,
+            lastBuildAt: endTime 
+          },
+          { new: true }
+        );
+        if (updateResult) {
+          console.log(`✅ Updated build status to 'success' in database for project ${projectId}`);
+        } else {
+          console.error(`⚠️ Project ${projectId} not found in database for status update`);
+        }
+      } catch (dbErr: any) {
+        console.error(`❌ Failed to update database status: ${dbErr.message}`);
+      }
       console.log(`✅ Build completed for project ${projectId} (type: ${deploymentType || 'vite-react-ts'})`);
-      return { success: true, projectId, filesUploaded: uploadedCount, deploymentType };
+      return { success: true, projectId, filesUploaded: uploadedCount, deploymentType, logPath };
     } catch (err: any) {
       console.error(`❌ Build failed for project ${projectId}: ${err.message}`);
+      
+      const endTime = new Date();
+      const duration = endTime.getTime() - startTime.getTime();
+      buildLogs.push(`\n❌ Build Failed at ${endTime.toISOString()}\n`);
+      buildLogs.push(`Error: ${err.message}\n`);
+      if (err.stack) {
+        buildLogs.push(`\nStack Trace:\n${err.stack}\n`);
+      }
+      buildLogs.push(`\nTotal Duration: ${(duration / 1000).toFixed(2)}s\n`);
+      
+      // Save failure logs to MinIO
+      try {
+        await saveBuildLogs(projectId, buildLogs.join(''), 'failed');
+      } catch (logErr: any) {
+        console.error(`Failed to save error logs: ${logErr.message}`);
+      }
+
+      // Update MongoDB: Build failed
+      try {
+        const updateResult = await ProjectModel.findOneAndUpdate(
+          { projectId },
+          { 
+            buildStatus: 'failed',
+            buildError: err.message,
+            lastBuildAt: endTime 
+          },
+          { new: true }
+        );
+        if (updateResult) {
+          console.log(`✅ Updated build status to 'failed' in database for project ${projectId}`);
+          console.log(`   Error: ${err.message}`);
+        } else {
+          console.error(`⚠️ Project ${projectId} not found in database for status update`);
+        }
+      } catch (dbErr: any) {
+        console.error(`❌ Failed to update database status: ${dbErr.message}`);
+      }
 
       // Clean up on failure
       if (fs.existsSync(buildPath)) {

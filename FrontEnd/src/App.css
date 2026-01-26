@@ -6,59 +6,68 @@
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+    'Ubuntu', 'Cantarell', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #0a0a0f;
-  color: #e0e0e0;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .app-container {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background: var(--bg-primary);
 }
 
 .navbar {
-  background: linear-gradient(135deg, #16161d 0%, #1e1e28 100%);
-  color: white;
-  padding: 0 30px;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  padding: 16px 32px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
   height: 70px;
-  border-bottom: 1px solid #2a2a3a;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
 }
 
 .nav-brand {
   font-size: 24px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+  transition: all 0.2s ease;
+}
+
+.nav-brand:hover {
+  color: var(--accent-primary);
+  transform: scale(1.02);
 }
 
 .nav-links {
   display: flex;
-  gap: 25px;
+  gap: 24px;
   align-items: center;
 }
 
 .nav-links a {
-  color: #b0b0b0;
+  color: var(--text-secondary);
   text-decoration: none;
   font-weight: 500;
-  transition: color 0.2s;
-  padding: 8px 0;
+  font-size: 15px;
+  transition: all 0.2s ease;
   position: relative;
+  padding: 8px 0;
 }
 
 .nav-links a:hover {
-  color: #e0e0e0;
+  color: var(--text-primary);
+  transform: translateY(-1px);
 }
 
 .nav-links a::after {
@@ -68,8 +77,8 @@ body {
   left: 0;
   width: 0;
   height: 2px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  transition: width 0.3s;
+  background: var(--accent-primary);
+  transition: width 0.2s ease;
 }
 
 .nav-links a:hover::after {
@@ -77,19 +86,41 @@ body {
 }
 
 .nav-links button {
-  padding: 10px 20px;
-  background: transparent;
-  color: #f87171;
-  border: 2px solid #f87171;
-  border-radius: 10px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.1) 100%);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
-  transition: all 0.3s;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+  position: relative;
+  overflow: hidden;
+}
+
+.nav-links button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(239, 68, 68, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.nav-links button:hover::before {
+  left: 100%;
 }
 
 .nav-links button:hover {
-  background: #f87171;
-  color: #0a0a0f;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.2) 0%, rgba(220, 38, 38, 0.15) 100%);
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fef2f2;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+  transform: translateY(-2px);
 }
 
 .loading {
@@ -98,15 +129,32 @@ body {
   align-items: center;
   min-height: 100vh;
   font-size: 18px;
-  color: #888;
-  background: #0a0a0f;
+  color: var(--text-secondary);
+}
+
+.loading::after {
+  content: '';
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-left: 12px;
+  border: 3px solid rgba(59, 130, 246, 0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 600px) {
   .navbar {
     flex-direction: column;
-    gap: 15px;
-    padding: 15px;
+    gap: 16px;
+    padding: 16px;
     height: auto;
   }
 

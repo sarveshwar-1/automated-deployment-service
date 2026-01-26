@@ -22,6 +22,7 @@ import {
 } from "./auth";
 import { UserModel, ProjectModel, RefreshTokenModel } from "./db";
 import { requirePermission, requireRole, canAccessProject } from "./middleware/rbac";
+//all the rate limiters are disabled now for testing purposes.
 import { apiLimiter, authLimiter, signupLimiter, deployLimiter, refreshLimiter } from "./middleware/rateLimiter";
 import {
   validateRepoUrl,
@@ -45,7 +46,7 @@ import { checkLockout, recordFailedAttempt, resetFailedAttempts } from "./securi
 
 // MongoDB connection
 async function connectDB() {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://172.17.9.74:27018/automated-deployment';
+  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27018/automated-deployment';
   await mongoose.connect(mongoUri);
   console.log('📦 Connected to MongoDB');
 }
@@ -63,7 +64,8 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
       imgSrc: ["'self'", "data:", "https:"],
     }
   }
@@ -71,8 +73,10 @@ app.use(helmet({
 
 // Hardened CORS - only allow specific origins
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://172.17.9.74:5173',
-  'http://172.17.9.74:3002'
+  process.env.FRONTEND_URL || 'http://localhost:5173',
+  'http://localhost:5173', // Allow localhost for development
+  'http://localhost:3002',
+  'http://localhost:3002' // Allow localhost API
 ];
 
 app.use(cors({
@@ -93,11 +97,11 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 
 // Apply general rate limiting to all routes
-app.use(apiLimiter);
+//app.use(apiLimiter);
 
 // Redis connection for queue
 const redis = new Redis({
-  host: process.env.REDIS_HOST || '172.17.9.74',
+  host: process.env.REDIS_HOST || 'localhost',
   port: parseInt(process.env.REDIS_PORT || '6380'),
   maxRetriesPerRequest: null,
 });
@@ -119,7 +123,7 @@ app.get('/health', (req: Request, res: Response) => {
  * User Signup with validation
  * Rate limited: 10 signups per hour per IP
  */
-app.post('/signup', signupLimiter, async (req: Request, res: Response) => {
+app.post('/signup', async (req: Request, res: Response) => {
   console.log('📝 Signup request received');
 
   const { username, password, email } = req.body;
@@ -171,7 +175,7 @@ app.post('/signup', signupLimiter, async (req: Request, res: Response) => {
  * User Signin with account lockout protection
  * Rate limited: 5 attempts per 15 minutes per IP
  */
-app.post('/signin', authLimiter, async (req: Request, res: Response) => {
+app.post('/signin', async (req: Request, res: Response) => {
   console.log('🔑 Signin request received');
 
   const { email, password } = req.body;
@@ -243,10 +247,146 @@ app.post('/signin', authLimiter, async (req: Request, res: Response) => {
 });
 
 /**
+ * GitHub OAuth - Exchange authorization code for access token
+ * 
+ * Flow:
+ * 1. Frontend redirects user to GitHub OAuth page
+ * 2. User authorizes
+ * 3. GitHub redirects back with ?code=...
+ * 4. Frontend sends code to this endpoint
+ * 5. We exchange code for GitHub access token
+ * 6. Fetch user info from GitHub
+ * 7. Create/update user in our DB
+ * 8. Return our JWT tokens
+ */
+app.post('/auth/github', async (req: Request, res: Response) => {
+  console.log('🐙 GitHub OAuth request');
+  
+  const { code } = req.body;
+  
+  if (!code) {
+    res.status(400).json({ error: "Authorization code required" });
+    return;
+  }
+
+  try {
+    // Step 1: Exchange code for GitHub access token
+    const tokenResponse = await axios.post(
+      'https://github.com/login/oauth/access_token',
+      {
+        client_id: process.env.GITHUB_CLIENT_ID,
+        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        code: code
+      },
+      {
+        headers: { Accept: 'application/json' }
+      }
+    );
+
+    const { access_token: githubAccessToken } = tokenResponse.data;
+
+    if (!githubAccessToken) {
+      res.status(400).json({ error: "Failed to get access token from GitHub" });
+      return;
+    }
+
+    // Step 2: Fetch user info from GitHub
+    const userResponse = await axios.get('https://api.github.com/user', {
+      headers: { Authorization: `Bearer ${githubAccessToken}` }
+    });
+
+    const githubUser = userResponse.data;
+
+    // Step 3: Get user's email (might need separate call)
+    let email = githubUser.email;
+    if (!email) {
+      const emailResponse = await axios.get('https://api.github.com/user/emails', {
+        headers: { Authorization: `Bearer ${githubAccessToken}` }
+      });
+      const primaryEmail = emailResponse.data.find((e: any) => e.primary);
+      email = primaryEmail?.email || emailResponse.data[0]?.email;
+    }
+
+    if (!email) {
+      res.status(400).json({ error: "Could not retrieve email from GitHub" });
+      return;
+    }
+
+    // Step 4: Create or update user in our database
+    let user = await UserModel.findOne({ githubId: githubUser.id.toString() });
+
+    if (!user) {
+      // Check if user exists with same email (merge accounts)
+      user = await UserModel.findOne({ email });
+      
+      if (user) {
+        // Update existing user with GitHub info
+        user.githubId = githubUser.id.toString();
+        user.githubUsername = githubUser.login;
+        user.githubAccessToken = githubAccessToken; // TODO: Encrypt this
+        user.authProvider = 'github';
+        await user.save();
+      } else {
+        // Create new user
+        user = await UserModel.create({
+          email,
+          name: githubUser.name || githubUser.login,
+          githubId: githubUser.id.toString(),
+          githubUsername: githubUser.login,
+          githubAccessToken: githubAccessToken, // TODO: Encrypt this
+          authProvider: 'github',
+          role: 'developer'
+        });
+      }
+    } else {
+      // Update existing GitHub user's token
+      user.githubAccessToken = githubAccessToken;
+      user.lastSuccessfulLogin = new Date();
+      await user.save();
+    }
+
+    // Step 5: Generate our JWT tokens
+    const accessToken = signAccessToken(user._id.toString(), user.role);
+    const jti = uuidv4();
+    const refreshToken = signRefreshToken(user._id.toString(), user.role, jti);
+
+    // Store refresh token
+    await RefreshTokenModel.create({
+      userId: user._id,
+      token: refreshToken,
+      jti: jti,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip
+    });
+
+    res.json({
+      message: "GitHub authentication successful",
+      accessToken,
+      refreshToken,
+      expiresIn: 900, // 15 minutes
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        githubUsername: user.githubUsername
+      }
+    });
+  } catch (error: any) {
+    console.error('GitHub OAuth error:', error.response?.data || error.message);
+    res.status(500).json({ 
+      error: "GitHub authentication failed",
+      details: error.response?.data || error.message
+    });
+  }
+});
+
+/**
  * Token Refresh - Exchange refresh token for new access token
  * Similar to Kerberos TGS (Ticket Granting Service)
  */
-app.post('/refresh', refreshLimiter, async (req: Request, res: Response) => {
+app.post('/refresh', async (req: Request, res: Response) => {
   console.log('🔄 Token refresh request');
 
   const { refreshToken } = req.body;
@@ -322,6 +462,94 @@ app.post('/logout', authMiddleware, async (req: AuthRequest, res: Response) => {
 });
 
 // ===================
+// GITHUB INTEGRATION
+// ===================
+
+/**
+ * Fetch user's GitHub repositories
+ * 
+ * Uses the stored GitHub access token to fetch repositories.
+ * Returns both public and private repos based on OAuth scope.
+ */
+app.get('/github/repos', authMiddleware, async (req: AuthRequest, res: Response) => {
+  console.log('🐙 Fetching GitHub repositories for user:', req.id);
+  
+  try {
+    // Get user from database
+    const user = await UserModel.findById(req.id);
+    
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    // Check if user has GitHub linked
+    if (!user.githubAccessToken) {
+      res.status(400).json({ 
+        error: "GitHub account not linked",
+        message: "Please sign in with GitHub to link your account"
+      });
+      return;
+    }
+
+    // Fetch repositories from GitHub API
+    const response = await axios.get('https://api.github.com/user/repos', {
+      headers: {
+        Authorization: `Bearer ${user.githubAccessToken}`,
+        Accept: 'application/vnd.github.v3+json'
+      },
+      params: {
+        sort: 'updated',        // Sort by last updated
+        per_page: 100,          // Max per page
+        affiliation: 'owner'    // Only repos user owns (not orgs)
+      }
+    });
+
+    // Transform data to include only what we need
+    const repos = response.data.map((repo: any) => ({
+      id: repo.id,
+      name: repo.name,
+      fullName: repo.full_name,
+      description: repo.description,
+      url: repo.html_url,
+      cloneUrl: repo.clone_url,
+      sshUrl: repo.ssh_url,
+      private: repo.private,
+      defaultBranch: repo.default_branch,
+      language: repo.language,
+      size: repo.size,
+      stargazers: repo.stargazers_count,
+      forks: repo.forks_count,
+      updatedAt: repo.updated_at,
+      pushedAt: repo.pushed_at
+    }));
+
+    res.json({
+      repos,
+      total: repos.length,
+      githubUsername: user.githubUsername
+    });
+
+  } catch (error: any) {
+    console.error('GitHub API error:', error.response?.data || error.message);
+    
+    // Handle token expiration or revocation
+    if (error.response?.status === 401) {
+      res.status(401).json({ 
+        error: "GitHub token expired or revoked",
+        message: "Please re-authenticate with GitHub"
+      });
+      return;
+    }
+
+    res.status(500).json({ 
+      error: "Failed to fetch repositories",
+      details: error.response?.data?.message || error.message
+    });
+  }
+});
+
+// ===================
 // PROJECT ENDPOINTS
 // ===================
 
@@ -391,12 +619,130 @@ app.delete('/deleteProject', authMiddleware, async (req: AuthRequest, res: Respo
 
     await deleteFolder("source-code", `${sanitizedProjectId}/`);
     await deleteFolder("static-builds", `${sanitizedProjectId}/`);
+    await deleteFolder("build-logs", `${sanitizedProjectId}/`);
     await ProjectModel.deleteOne({ projectId: sanitizedProjectId });
 
     res.json({ message: "Project deleted successfully" });
   } catch (error) {
     console.error('Delete error:', error);
     res.status(500).json({ error: "Failed to delete project" });
+  }
+});
+
+/**
+ * Get build logs list for a project
+ * Returns list of all build log files with metadata
+ */
+app.get('/projects/:projectId/logs', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId } = req.params;
+    const sanitizedProjectId = sanitizeProjectId(projectId);
+
+    // Verify project exists and user has access
+    const project = await ProjectModel.findOne({ projectId: sanitizedProjectId });
+    if (!project) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
+    if (!canAccessProject(req, project.userId.toString())) {
+      res.status(403).json({ error: "Forbidden: You cannot access this project's logs" });
+      return;
+    }
+
+    // List all log files from MinIO
+    const logs: Array<{
+      fileName: string;
+      timestamp: string;
+      status: 'success' | 'failed';
+      size: number;
+    }> = [];
+
+    const objectsStream = minioClient.listObjects('build-logs', `${sanitizedProjectId}/`, false);
+    
+    for await (const obj of objectsStream) {
+      if (obj.name) {
+        const fileName = obj.name.split('/').pop() || '';
+        // Parse filename format: 2026-01-24T12-30-45-123Z-success.log
+        const match = fileName.match(/^(.+)-(success|failed)\.log$/);
+        
+        if (match) {
+          const timestamp = match[1].replace(/-/g, ':').replace(/T/g, 'T').replace(/Z/g, '.000Z');
+          const status = match[2] as 'success' | 'failed';
+          
+          logs.push({
+            fileName,
+            timestamp,
+            status,
+            size: obj.size || 0,
+          });
+        }
+      }
+    }
+
+    // Sort by timestamp descending (newest first)
+    logs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    res.json({ logs });
+  } catch (error) {
+    console.error('Get logs error:', error);
+    res.status(500).json({ error: "Failed to fetch build logs" });
+  }
+});
+
+/**
+ * Get specific build log content
+ * Returns the full log file content
+ */
+app.get('/projects/:projectId/logs/:fileName', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { projectId, fileName } = req.params;
+    const sanitizedProjectId = sanitizeProjectId(projectId);
+
+    // Verify project exists and user has access
+    const project = await ProjectModel.findOne({ projectId: sanitizedProjectId });
+    if (!project) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
+    if (!canAccessProject(req, project.userId.toString())) {
+      res.status(403).json({ error: "Forbidden: You cannot access this project's logs" });
+      return;
+    }
+
+    // Validate fileName to prevent path traversal
+    if (fileName.includes('..') || fileName.includes('/')) {
+      res.status(400).json({ error: "Invalid file name" });
+      return;
+    }
+
+    const objectKey = `${sanitizedProjectId}/${fileName}`;
+
+    // Stream log content from MinIO
+    const stream = await minioClient.getObject('build-logs', objectKey);
+    
+    let logContent = '';
+    stream.on('data', (chunk) => {
+      logContent += chunk.toString();
+    });
+
+    stream.on('end', () => {
+      res.json({ content: logContent });
+    });
+
+    stream.on('error', (err) => {
+      console.error('Stream error:', err);
+      res.status(404).json({ error: "Log file not found" });
+    });
+
+  } catch (error: any) {
+    console.error('Get log content error:', error);
+    if (error.code === 'NoSuchKey') {
+      res.status(404).json({ error: "Log file not found" });
+    } else {
+      res.status(500).json({ error: "Failed to fetch log content" });
+    }
   }
 });
 
@@ -435,10 +781,23 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), deployL
   const repoMeta = repoUrl.replace('.git', '').replace('https://github.com/', 'https://api.github.com/repos/');
 
   try {
+    // Get user's GitHub access token if available (for authenticated requests - 5000/hour vs 60/hour)
+    const user = await UserModel.findById(userId);
+    const githubToken = user?.githubAccessToken;
+    
+    // Setup headers for authenticated GitHub API requests
+    const headers: any = {};
+    if (githubToken) {
+      headers['Authorization'] = `Bearer ${githubToken}`;
+      console.log('🔑 Using authenticated GitHub API (5000 req/hour)');
+    } else {
+      console.log('⚠️  Using unauthenticated GitHub API (60 req/hour)');
+    }
+
     // Get repository info from GitHub
-    const response = await axios.get(repoMeta);
+    const response = await axios.get(repoMeta, { headers });
     const defaultBranch = response.data.default_branch;
-    const response2 = await axios.get(`${repoMeta}/branches/${defaultBranch}`);
+    const response2 = await axios.get(`${repoMeta}/branches/${defaultBranch}`, { headers });
     const commitSha = response2.data.commit.sha;
 
     console.log('📌 Default branch:', defaultBranch, '| Commit:', commitSha);
@@ -454,6 +813,7 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), deployL
       buildCommand: buildCommand || null,
       outputDir: outputDir || null,
       envVars: envVars || {},
+      githubToken: githubToken, // Pass token for authenticated git operations
     };
 
     await deploymentQueue.add('deploy', jobData, {
@@ -473,6 +833,8 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), deployL
       buildCommand: buildCommand || null,
       outputDir: outputDir || null,
       envVars: envVars || {},
+      buildStatus: 'building', // Set initial status as building
+      lastBuildAt: new Date(),
     });
 
     res.status(202).json({
@@ -481,6 +843,7 @@ app.post('/deploy', authMiddleware, requirePermission('project:create'), deployL
       commitSha: commitSha,
       defaultBranch: defaultBranch,
       deploymentType: selectedDeploymentType,
+      buildStatus: 'building', // Return status to frontend
     });
   } catch (error: any) {
     console.error('Deploy error:', error);
@@ -536,7 +899,7 @@ app.put('/admin/users/:userId/role', authMiddleware, requireRole(['admin']), asy
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  const serverIp = process.env.SERVER_IP || '172.17.9.74';
+  const serverIp = process.env.SERVER_IP || 'localhost';
   console.log(`🚀 Secure Upload Service running on http://${serverIp}:${PORT}`);
   console.log(`🔐 Security features enabled: RS256 JWT, RBAC, Rate Limiting, Input Validation, Account Lockout`);
 });

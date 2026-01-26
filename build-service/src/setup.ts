@@ -3,7 +3,7 @@ import { minioClient, BUCKETS } from "./minio";
 async function setup() {
   console.log("🪣 Setting up MinIO buckets for build-service...\n");
 
-  const buckets = [BUCKETS.SOURCE_CODE, BUCKETS.STATIC_BUILDS];
+  const buckets = [BUCKETS.SOURCE_CODE, BUCKETS.STATIC_BUILDS, BUCKETS.BUILD_LOGS];
 
   for (const bucket of buckets) {
     try {
@@ -43,6 +43,7 @@ async function setup() {
   console.log("\nBuckets:");
   console.log(`  • ${BUCKETS.SOURCE_CODE}    - Stores cloned repository files`);
   console.log(`  • ${BUCKETS.STATIC_BUILDS}  - Stores built static files (public read)`);
+  console.log(`  • ${BUCKETS.BUILD_LOGS}     - Stores build logs (private)`);
 }
 
 setup()

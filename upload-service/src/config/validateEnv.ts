@@ -96,16 +96,16 @@ export function validateEnvironment(): void {
  */
 export function getConfig(): EnvConfig {
   return {
-    MONGODB_URI: process.env.MONGODB_URI || 'mongodb://172.17.9.74:27018/automated-deployment',
-    REDIS_HOST: process.env.REDIS_HOST || '172.17.9.74',
+    MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27018/automated-deployment',
+    REDIS_HOST: process.env.REDIS_HOST || 'localhost',
     REDIS_PORT: parseInt(process.env.REDIS_PORT || '6380'),
-    MINIO_ENDPOINT: process.env.MINIO_ENDPOINT || '172.17.9.74',
+    MINIO_ENDPOINT: process.env.MINIO_ENDPOINT || 'localhost',
     MINIO_PORT: parseInt(process.env.MINIO_PORT || '9010'),
     MINIO_ACCESS_KEY: process.env.MINIO_ACCESS_KEY || 'minioadmin',
     MINIO_SECRET_KEY: process.env.MINIO_SECRET_KEY || 'minioadmin',
     MINIO_USE_SSL: process.env.MINIO_USE_SSL === 'true',
     NODE_ENV: process.env.NODE_ENV || 'development',
-    FRONTEND_URL: process.env.FRONTEND_URL || 'http://172.17.9.74:5173',
+    FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
     PORT: parseInt(process.env.PORT || '3000'),
     KEYS_DIR: process.env.KEYS_DIR
   };

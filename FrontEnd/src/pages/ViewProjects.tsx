@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import "../styles/ViewProjects.css";
 import { API_URL, BUILD_SERVICE_URL } from "../config";
 
@@ -9,15 +10,34 @@ interface Project {
   defaultBranch: string;
   commitSha: string;
   userId: string;
+  buildStatus?: 'pending' | 'building' | 'success' | 'failed';
+  buildError?: string;
+  lastBuildAt?: string;
 }
 function ViewProjects() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const projectsRef = useRef<Project[]>([]);
+
+  // Update ref when projects change
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
 
   useEffect(() => {
     fetchProjects();
+
+    // Poll for status updates every 5 seconds
+    const pollInterval = setInterval(() => {
+      // Only poll if there are building projects
+      if (projectsRef.current.some(p => p.buildStatus === 'building')) {
+        fetchProjects();
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
   }, []);
 
   const fetchProjects = async () => {
@@ -123,6 +143,14 @@ function ViewProjects() {
                   <h3 className="project-name">
                     {project.url.split("/").pop()}
                   </h3>
+                  {project.buildStatus && (
+                    <span className={`status-badge status-${project.buildStatus}`}>
+                      {project.buildStatus === 'building' && 'Building'}
+                      {project.buildStatus === 'success' && 'Live'}
+                      {project.buildStatus === 'failed' && 'Failed'}
+                      {project.buildStatus === 'pending' && 'Pending'}
+                    </span>
+                  )}
                 </div>
 
                 <div className="card-body">
@@ -148,28 +176,60 @@ function ViewProjects() {
                     <span>{project.defaultBranch}</span>
                   </div>
 
-                  <div className="info-row">
-                    <label>Preview URL</label>
+                  {project.buildStatus === 'success' && (
+                    <div className="info-row">
+                      <label>Preview URL</label>
+                      <a
+                        href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="preview-link"
+                      >
+                        {`${BUILD_SERVICE_URL}/${project.projectId}/`}
+                      </a>
+                    </div>
+                  )}
+
+                  {project.buildStatus === 'building' && (
+                    <div className="info-row">
+                      <label>Status</label>
+                      <span className="building-text">Build in progress...</span>
+                    </div>
+                  )}
+
+                  {project.buildStatus === 'failed' && (
+                    <div className="info-row">
+                      <label>Status</label>
+                      <span className="failed-text">Build failed</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="card-footer">
+                  <Link
+                    to={`/dashboard/${project.projectId}`}
+                    className="dashboard-btn"
+                  >
+                    Dashboard
+                  </Link>
+                  {project.buildStatus === 'success' ? (
                     <a
                       href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="preview-link"
+                      className="preview-btn"
                     >
-                      {`${BUILD_SERVICE_URL}/${project.projectId}/`}
+                      Preview
                     </a>
-                  </div>
-                </div>
-
-                <div className="card-footer">
-                  <a
-                    href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="preview-btn"
-                  >
-                    🚀 Preview
-                  </a>
+                  ) : (
+                    <button
+                      className="preview-btn"
+                      disabled
+                      title="Build must complete successfully first"
+                    >
+                      Preview
+                    </button>
+                  )}
                   <button
                     className="delete-btn"
                     onClick={() => handleDeleteProject(project.projectId)}
