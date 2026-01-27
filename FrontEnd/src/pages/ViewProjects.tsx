@@ -125,7 +125,12 @@ function ViewProjects() {
   return (
     <div className="projects-container">
       <div className="projects-box">
-        <h2>My Projects</h2>
+        <div className="projects-header">
+          <h2>My Projects</h2>
+          <a href="/test-analytics" className="test-analytics-btn">
+            📊 Test Log Analytics
+          </a>
+        </div>
 
         {error && <div className="error-message">{error}</div>}
 

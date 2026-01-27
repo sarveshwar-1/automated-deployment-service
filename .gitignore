@@ -12,3 +12,4 @@
 /Frontend/dist
 /Frontend/*.local
 .env
+access.log 

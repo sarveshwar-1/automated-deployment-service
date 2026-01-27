@@ -87,7 +87,8 @@ function SignUp() {
               minLength={8}
             />
             <small className="password-hint">
-              Password must be 8+ characters with uppercase, lowercase, number, and special character.
+              Password must be 8+ characters with uppercase, lowercase, number,
+              and special character.
             </small>
           </div>
 

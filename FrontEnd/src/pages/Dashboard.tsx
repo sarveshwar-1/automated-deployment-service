@@ -30,7 +30,7 @@ function Dashboard() {
   const [project, setProject] = useState<ProjectDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState<'overview' | 'deployments' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'deployments' | 'analytics' | 'settings'>('overview');
   const [buildLogs, setBuildLogs] = useState<BuildLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [selectedLog, setSelectedLog] = useState<string | null>(null);
@@ -284,6 +284,12 @@ function Dashboard() {
               Deployments
             </button>
             <button 
+              className={`tab ${activeTab === 'analytics' ? 'active' : ''}`}
+              onClick={() => setActiveTab('analytics')}
+            >
+              Analytics
+            </button>
+            <button 
               className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
               onClick={() => setActiveTab('settings')}
             >
@@ -509,6 +515,10 @@ function Dashboard() {
           </div>
         )}
 
+        {activeTab === 'analytics' && (
+          <LogAnalyticsTab projectId={project.projectId} />
+        )}
+
         {activeTab === 'settings' && (
           <div className="settings-layout">
             <div className="card">
@@ -580,6 +590,243 @@ function Dashboard() {
         )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Simplified Analytics Component
+function LogAnalyticsTab({ projectId }: { projectId: string }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [analytics, setAnalytics] = useState<any>(null);
+
+  const runAnalytics = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      console.log(`Fetching logs for project: ${projectId}`);
+      const response = await fetch(`${BUILD_SERVICE_URL}/api/logs/${projectId}?limit=5000`);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch logs' }));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log(`Received ${data.logs?.length || 0} logs for ${projectId}`);
+      
+      const logs = (data.logs || []).map((log: any) => ({
+        timestamp: new Date(log.timestamp),
+        method: log.method,
+        path: log.path,
+        statusCode: log.statusCode,
+        responseTime: log.responseTime,
+        ip: log.ip
+      }));
+
+      if (logs.length === 0) {
+        setAnalytics({
+          totalRequests: 0,
+          uniqueIPs: 0,
+          avgResponseTime: 0,
+          errorRate: 0,
+          topPaths: [],
+          statusDistribution: [],
+          hourlyTraffic: [],
+          isEmpty: true
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Process analytics
+      const totalRequests = logs.length;
+      const uniqueIPs = new Set(logs.map((l: any) => l.ip)).size;
+      const avgResponseTime = Math.round(logs.reduce((sum: number, l: any) => sum + l.responseTime, 0) / logs.length);
+      const errorCount = logs.filter((l: any) => l.statusCode >= 400).length;
+      const errorRate = Number(((errorCount / totalRequests) * 100).toFixed(2));
+
+      // Top paths
+      const pathCounts = new Map<string, number>();
+      logs.forEach((log: any) => {
+        pathCounts.set(log.path, (pathCounts.get(log.path) || 0) + 1);
+      });
+      const topPaths = Array.from(pathCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([path, count]) => ({ path, count }));
+
+      // Status distribution
+      const statusCounts = new Map<string, number>();
+      logs.forEach((log: any) => {
+        const status = `${Math.floor(log.statusCode / 100)}xx`;
+        statusCounts.set(status, (statusCounts.get(status) || 0) + 1);
+      });
+      const statusDistribution = Array.from(statusCounts.entries())
+        .map(([status, count]) => ({ status, count }));
+
+      // Hourly aggregation
+      const hourlyMap = new Map<string, number>();
+      logs.forEach((log: any) => {
+        const hour = new Date(log.timestamp);
+        hour.setMinutes(0, 0, 0);
+        const key = hour.toISOString();
+        hourlyMap.set(key, (hourlyMap.get(key) || 0) + 1);
+      });
+      const hourlyTraffic = Array.from(hourlyMap.entries())
+        .map(([timestamp, count]) => ({ timestamp, count }))
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+      setAnalytics({
+        totalRequests,
+        uniqueIPs,
+        avgResponseTime,
+        errorRate,
+        topPaths,
+        statusDistribution,
+        hourlyTraffic,
+        isEmpty: false
+      });
+
+    } catch (err: any) {
+      console.error('Analytics error:', err);
+      setError(err.message || "Failed to load analytics");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="analytics-tab">
+      <div className="card">
+        <div className="card-header">
+          <h2 className="card-title">Log Analytics</h2>
+          <button 
+            onClick={runAnalytics}
+            disabled={loading}
+            className="run-analytics-btn"
+          >
+            {loading ? "Loading..." : analytics ? "Refresh" : "Run Analysis"}
+          </button>
+        </div>
+
+        {loading && !analytics && (
+          <div className="analytics-loading">
+            <div className="loading-spinner"></div>
+            <p>Loading analytics data...</p>
+          </div>
+        )}
+
+        {error && (
+          <div className="analytics-error">
+            ⚠️ {error}
+          </div>
+        )}
+
+        {analytics?.isEmpty && (
+          <div className="analytics-empty">
+            <div className="empty-icon">📊</div>
+            <h3>No Traffic Data Yet</h3>
+            <p>Your site hasn't received any visits yet. Once users access your deployed project, you'll see analytics here.</p>
+            <div className="empty-actions">
+              <a 
+                href={`${BUILD_SERVICE_URL}/${projectId}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="visit-site-btn"
+              >
+                Visit Your Site →
+              </a>
+            </div>
+          </div>
+        )}
+
+        {analytics && !analytics.isEmpty && (
+          <div className="card-content">
+            {/* Metrics Grid */}
+            <div className="analytics-metrics">
+              <div className="analytics-metric">
+                <div className="metric-label">Total Requests</div>
+                <div className="metric-value">{analytics.totalRequests.toLocaleString()}</div>
+              </div>
+              <div className="analytics-metric">
+                <div className="metric-label">Unique IPs</div>
+                <div className="metric-value">{analytics.uniqueIPs.toLocaleString()}</div>
+              </div>
+              <div className="analytics-metric">
+                <div className="metric-label">Avg Response</div>
+                <div className="metric-value">{analytics.avgResponseTime}ms</div>
+              </div>
+              <div className="analytics-metric">
+                <div className="metric-label">Error Rate</div>
+                <div className="metric-value">{analytics.errorRate}%</div>
+              </div>
+            </div>
+
+            {/* Charts Row */}
+            <div className="analytics-charts">
+              <div className="analytics-chart-card">
+                <h3>Status Distribution</h3>
+                <div className="status-list">
+                  {analytics.statusDistribution.map(({ status, count }: any) => (
+                    <div key={status} className="status-item">
+                      <span className="status-name">{status}</span>
+                      <div className="status-bar-wrapper">
+                        <div 
+                          className={`status-bar-fill status-${status.replace('xx', '')}`}
+                          style={{ width: `${(count / analytics.totalRequests) * 100}%` }}
+                        />
+                      </div>
+                      <span className="status-value">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="analytics-chart-card">
+                <h3>Top Paths</h3>
+                <div className="paths-list">
+                  {analytics.topPaths.slice(0, 8).map(({ path, count }: any) => (
+                    <div key={path} className="path-item">
+                      <span className="path-name" title={path}>
+                        {path.length > 40 ? path.substring(0, 40) + "..." : path}
+                      </span>
+                      <span className="path-value">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Traffic Chart */}
+            <div className="analytics-chart-card traffic-chart">
+              <h3>Traffic Over Time ({analytics.hourlyTraffic.length} hours)</h3>
+              <SimpleTrafficChart data={analytics.hourlyTraffic} />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SimpleTrafficChart({ data }: { data: { timestamp: string; count: number }[] }) {
+  if (data.length === 0) return <div className="no-data">No data</div>;
+
+  const maxCount = Math.max(...data.map(d => d.count));
+  
+  return (
+    <div className="simple-chart">
+      {data.map((d, i) => (
+        <div key={i} className="chart-bar-wrapper">
+          <div 
+            className="chart-bar"
+            style={{ height: `${(d.count / maxCount) * 100}%` }}
+            title={`${new Date(d.timestamp).toLocaleString()}: ${d.count} requests`}
+          />
+        </div>
+      ))}
     </div>
   );
 }

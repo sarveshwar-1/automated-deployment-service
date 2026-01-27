@@ -6,6 +6,8 @@ import GitHubCallback from './pages/GitHubCallback';
 import Deploy from './pages/Deploy';
 import ViewProjects from './pages/ViewProjects';
 import Dashboard from './pages/Dashboard';
+import LogAnalytics from './pages/LogAnalytics';
+import TestLogAnalytics from './pages/TestLogAnalytics';
 import './App.css';
 
 function App() {
@@ -68,6 +70,14 @@ function App() {
           <Route 
             path="/dashboard/:projectId" 
             element={isAuthenticated ? <Dashboard /> : <Navigate to="/signin" />} 
+          />
+          <Route 
+            path="/analytics/:projectId" 
+            element={isAuthenticated ? <LogAnalytics /> : <Navigate to="/signin" />} 
+          />
+          <Route 
+            path="/test-analytics" 
+            element={isAuthenticated ? <TestLogAnalytics /> : <Navigate to="/signin" />} 
           />
           <Route 
             path="/" 

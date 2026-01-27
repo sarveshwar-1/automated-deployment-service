@@ -235,6 +235,7 @@ services:
       - KAFKA_BROKER=kafka:29092
     volumes:
       - build_temp:/tmp
+      - ./access.log:/app/access.log:ro
     depends_on:
       mongodb:
         condition: service_healthy

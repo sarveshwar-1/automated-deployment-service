@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from "uuid";
 import { minioClient, BUCKETS } from "./minio";
 import { getContentType } from "./utils";
 import { RuntimeLogModel, RuntimeLog } from "./runtimeLog";
+import { parseAccessLog } from "./accessLogParser";
+import path from "path";
 
 const app = express();
 
@@ -144,6 +146,67 @@ app.get("/api/logs/:projectId", async (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Failed to fetch logs',
       message: error.message
+    });
+  }
+});
+
+/**
+ * === TEST LOG ANALYTICS API ===
+ * 
+ * Endpoint: GET /api/test-logs/access
+ * Purpose: Parse and return logs from the access.log file for testing
+ * 
+ * Query Parameters:
+ * - limit: Number of logs to return (default: 1000, max: 10000)
+ * 
+ * Example:
+ * GET /api/test-logs/access?limit=500
+ * 
+ * Response:
+ * {
+ *   logs: [...],
+ *   total: 500
+ * }
+ */
+app.get("/api/test-logs/access", async (req: Request, res: Response) => {
+  const { limit = '1000' } = req.query;
+
+  try {
+    // Path to access.log file (mounted as volume in Docker)
+    const logFilePath = '/app/access.log';
+
+    // Check if file exists
+    const fs = await import('fs');
+    if (!fs.existsSync(logFilePath)) {
+      console.error('❌ access.log file not found at:', logFilePath);
+      return res.status(404).json({
+        error: 'Access log file not found',
+        message: 'The access.log file is not available. Please ensure it is mounted in the Docker container.',
+        path: logFilePath
+      });
+    }
+
+    // Parse limit (max 10000 to prevent overload)
+    const parsedLimit = Math.min(parseInt(limit as string) || 1000, 10000);
+
+    console.log(`📊 Parsing access.log (limit: ${parsedLimit})...`);
+
+    // Parse the access log file
+    const logs = await parseAccessLog(logFilePath, parsedLimit);
+
+    console.log(`✅ Successfully parsed ${logs.length} log entries`);
+
+    res.json({
+      logs,
+      total: logs.length,
+      source: 'access.log'
+    });
+  } catch (error: any) {
+    console.error('❌ Error parsing access.log:', error);
+    res.status(500).json({
+      error: 'Failed to parse access log',
+      message: error.message,
+      details: error.stack
     });
   }
 });
