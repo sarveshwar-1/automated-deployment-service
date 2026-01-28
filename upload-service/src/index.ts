@@ -5,6 +5,7 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { minioClient } from "./minio";
 import { generateProjectId } from "./utils";
+import { MONGODB_URI, FRONTEND_URL, ALLOWED_ORIGINS } from "./config/env";
 import bcrypt from "bcrypt";
 import mongoose from "mongoose";
 import axios from "axios";
@@ -46,8 +47,7 @@ import { checkLockout, recordFailedAttempt, resetFailedAttempts } from "./securi
 
 // MongoDB connection
 async function connectDB() {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27018/automated-deployment';
-  await mongoose.connect(mongoUri);
+  await mongoose.connect(MONGODB_URI);
   console.log('📦 Connected to MongoDB');
 }
 connectDB();
@@ -71,13 +71,8 @@ app.use(helmet({
   }
 }));
 
-// Hardened CORS - only allow specific origins
-const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
-  'http://localhost:5173', // Allow localhost for development
-  'http://localhost:3002',
-  'http://localhost:3002' // Allow localhost API
-];
+// Hardened CORS - only allow specific origins (from centralized config)
+const allowedOrigins = ALLOWED_ORIGINS;
 
 app.use(cors({
   origin: (origin, callback) => {

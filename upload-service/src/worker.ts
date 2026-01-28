@@ -5,11 +5,12 @@ import path from "path";
 import { minioClient } from "./minio";
 import { getAllFiles, getContentType } from "./utils";
 import fs from "fs";
+import { REDIS_HOST, REDIS_PORT } from "./config/env";
 
 // Redis connection for queue
 const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6380'),
+  host: REDIS_HOST,
+  port: REDIS_PORT,
   maxRetriesPerRequest: null,
 });
 

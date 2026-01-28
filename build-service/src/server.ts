@@ -7,12 +7,12 @@ import { getContentType } from "./utils";
 import { RuntimeLogModel, RuntimeLog } from "./runtimeLog";
 import { parseAccessLog } from "./accessLogParser";
 import path from "path";
+import { MONGODB_URI, SERVER_IP, BUILD_SERVICE_PORT } from "./config/env";
 
 const app = express();
 
 // === MONGODB CONNECTION ===
-const MONGO_URI = process.env.MONGODB_URI || "mongodb://mongodb:27017/automated-deployment";
-mongoose.connect(MONGO_URI)
+mongoose.connect(MONGODB_URI)
   .then(() => console.log("✅ Build-service server connected to MongoDB for runtime logs"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
@@ -404,7 +404,7 @@ app.get("/", async (req: Request, res: Response) => {
         <div class="info">
           <p>Welcome to the static file server!</p>
           <p>Access your deployed projects at:</p>
-          <code>http://localhost:3001/{projectId}/</code>
+          <code>http://${SERVER_IP}:${BUILD_SERVICE_PORT}/{projectId}/</code>
           <p style="margin-top: 20px;">Replace <code>{projectId}</code> with your actual project ID.</p>
         </div>
       </body>
@@ -412,10 +412,9 @@ app.get("/", async (req: Request, res: Response) => {
   `);
 });
 
-const PORT = process.env.PORT || 3003;
+const PORT = process.env.PORT || BUILD_SERVICE_PORT;
 
 app.listen(PORT, () => {
-  const serverIp = process.env.SERVER_IP || 'localhost';
-  console.log(`🌐 Build service server running on http://${serverIp}:${PORT}`);
-  console.log(`Access projects at: http://${serverIp}:${PORT}/{projectId}/`);
+  console.log(`🌐 Build service server running on http://${SERVER_IP}:${PORT}`);
+  console.log(`Access projects at: http://${SERVER_IP}:${PORT}/{projectId}/`);
 });

@@ -5,11 +5,12 @@ import { UserModel, ProjectModel } from './db.js';
 import axios from 'axios';
 import { Queue } from 'bullmq';
 import Redis from 'ioredis';
+import { REDIS_HOST, REDIS_PORT, MONGODB_URI } from './config/env';
 
 // Redis connection
 const redis = new Redis({
-  host: process.env.REDIS_HOST || 'localhost',
-  port: parseInt(process.env.REDIS_PORT || '6380'),
+  host: REDIS_HOST,
+  port: REDIS_PORT,
   maxRetriesPerRequest: null,
 });
 
@@ -25,8 +26,7 @@ deploymentQueue.on('error', (err) => {
 });
 
 async function connectDB() {
-  const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27018/automated-deployment';
-  await mongoose.connect(mongoUri);
+  await mongoose.connect(MONGODB_URI);
   console.log('📦 Connected to MongoDB');
 }
 connectDB();

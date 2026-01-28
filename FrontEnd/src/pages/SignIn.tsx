@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/Auth.css";
-import { API_URL } from "../config";
+import { API_URL, FRONTEND_URL } from "../config";
 
 const GITHUB_CLIENT_ID = "Ov23lizLiwJ3aUUXKItr";
-const GITHUB_REDIRECT_URI = "http://localhost:5173/auth/github/callback";
+// GitHub OAuth callback - uses FRONTEND_URL from config
+// IMPORTANT: This URL must also be registered in your GitHub OAuth App settings:
+// https://github.com/settings/developers -> Your App -> Authorization callback URL
+const GITHUB_REDIRECT_URI = `${FRONTEND_URL}/auth/github/callback`;
 
 interface SignInProps {
   setIsAuthenticated: (value: boolean) => void;

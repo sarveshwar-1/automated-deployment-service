@@ -8,6 +8,7 @@ import { minioClient, BUCKETS } from "./minio";
 import { getAllFiles, getContentType } from "./utils";
 import { client } from "./kafka";
 import mongoose from "mongoose";
+import { MONGODB_URI, REDIS_HOST, REDIS_PORT } from "./config/env";
 
 const execAsync = promisify(exec);
 const producer = client.producer();
@@ -17,8 +18,7 @@ const producer = client.producer();
 })();
 
 // MongoDB connection
-const MONGO_URI = process.env.MONGODB_URI || "mongodb://mongo:27017/automated-deployment";
-mongoose.connect(MONGO_URI)
+mongoose.connect(MONGODB_URI)
   .then(() => console.log("✅ Build-service connected to MongoDB"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
@@ -43,8 +43,8 @@ const ProjectModel = mongoose.model('projects', ProjectSchema);
 
 // Redis connection for queue
 const redis = new Redis({
-  host: process.env.REDIS_HOST || "localhost",
-  port: parseInt(process.env.REDIS_PORT || "6380"),
+  host: REDIS_HOST,
+  port: REDIS_PORT,
   maxRetriesPerRequest: null,
 });
 

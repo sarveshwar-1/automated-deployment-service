@@ -7,12 +7,18 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Build arguments for Vite environment variables (must be set at build time)
+ARG VITE_SERVER_IP=localhost
 ARG VITE_API_URL=http://localhost:3002
 ARG VITE_BUILD_SERVICE_URL=http://localhost:3001
+ARG VITE_FRONTEND_URL=http://localhost:5173
+ARG VITE_GITHUB_CALLBACK_URL=http://localhost:5173/auth/github/callback
 
 # Set as environment variables for the build process
+ENV VITE_SERVER_IP=$VITE_SERVER_IP
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_BUILD_SERVICE_URL=$VITE_BUILD_SERVICE_URL
+ENV VITE_FRONTEND_URL=$VITE_FRONTEND_URL
+ENV VITE_GITHUB_CALLBACK_URL=$VITE_GITHUB_CALLBACK_URL
 
 # Install pnpm
 RUN npm install -g pnpm
