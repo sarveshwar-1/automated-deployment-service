@@ -295,6 +295,208 @@
   font-size: 16px;
 }
 
+/* Section Description */
+.section-description {
+  color: #888888;
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+/* Loading Message */
+.loading-message {
+  color: #888888;
+  font-size: 14px;
+  padding: 16px;
+  text-align: center;
+  background: #111111;
+  border-radius: 4px;
+  margin-top: 16px;
+}
+
+/* Model Info Banner */
+.model-info-banner {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.model-info-banner h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #60a5fa;
+  margin: 0 0 12px 0;
+}
+
+.model-info-grid {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  gap: 8px 16px;
+  font-size: 13px;
+}
+
+.info-label {
+  color: #888888;
+}
+
+.info-value {
+  color: #e5e5e5;
+  font-family: monospace;
+}
+
+/* Model Metrics Row */
+.model-metrics-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metrics-banner {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(22, 163, 74, 0.1) 100%);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.metrics-banner h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #4ade80;
+  margin: 0 0 12px 0;
+}
+
+.metrics-inline {
+  display: flex;
+  gap: 24px;
+}
+
+.metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-name {
+  font-size: 11px;
+  color: #888888;
+  text-transform: uppercase;
+}
+
+.metric-val {
+  font-size: 16px;
+  font-weight: 600;
+  color: #e5e5e5;
+  font-family: monospace;
+}
+
+.data-info-banner {
+  background: linear-gradient(135deg, rgba(251, 146, 60, 0.1) 0%, rgba(234, 88, 12, 0.1) 100%);
+  border: 1px solid rgba(251, 146, 60, 0.3);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.data-info-banner h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fb923c;
+  margin: 0 0 12px 0;
+}
+
+.data-info-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+
+/* SARIMA Chart Specific Styles */
+.sarima-chart {
+  background: #0a0a0a;
+}
+
+.chart-container-large {
+  width: 100%;
+  overflow-x: auto;
+  padding: 10px 0;
+}
+
+.sarima-svg {
+  width: 100%;
+  height: auto;
+  min-height: 350px;
+}
+
+.line-training {
+  fill: none;
+  stroke: #60a5fa;
+  stroke-width: 1.5;
+}
+
+.line-actual {
+  fill: none;
+  stroke: #22c55e;
+  stroke-width: 2;
+}
+
+.line-sarima {
+  fill: none;
+  stroke: #ef4444;
+  stroke-width: 2;
+  stroke-dasharray: 8 4;
+}
+
+.ci-area {
+  fill: rgba(239, 68, 68, 0.15);
+}
+
+.split-divider {
+  stroke: #666666;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.axis-title {
+  fill: #888888;
+  font-size: 12px;
+}
+
+/* SARIMA Legend */
+.sarima-legend {
+  justify-content: center;
+}
+
+.legend-line {
+  width: 24px;
+  height: 3px;
+}
+
+.legend-line.training {
+  background: #60a5fa;
+}
+
+.legend-line.actual {
+  background: #22c55e;
+}
+
+.legend-line.forecast {
+  background: repeating-linear-gradient(
+    90deg,
+    #ef4444 0px,
+    #ef4444 8px,
+    transparent 8px,
+    transparent 12px
+  );
+}
+
+.sarima-legend .legend-color.confidence {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
 /* Results Section */
 .results-section {
   animation: fadeIn 0.5s ease;
