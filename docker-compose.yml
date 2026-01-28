@@ -213,14 +213,13 @@ services:
       - ads-network
     restart: unless-stopped
 
-  # Build Service Worker - Builds projects and serves static files
+  # Build Service Worker - Builds projects (NO LONGER SERVES FILES)
   build-service:
     build:
       context: ./build-service
       dockerfile: Dockerfile
     container_name: ads-build-service
-    ports:
-      - "${BUILD_SERVICE_PORT:-3001}:3001" # Static file server
+    # Port 3001 removed - static serving moved to host-service
     environment:
       - NODE_ENV=production
       - MONGODB_URI=mongodb://mongodb:27017/automated-deployment
@@ -247,6 +246,43 @@ services:
         condition: service_completed_successfully
       kafka:
         condition: service_healthy
+    networks:
+      - ads-network
+    restart: unless-stopped
+
+  # Host Service - Runs project servers and routes via NGINX
+  host-service:
+    build:
+      context: ./host-service
+      dockerfile: Dockerfile
+    container_name: ads-host-service
+    ports:
+      - "${HOST_SERVICE_PORT:-3001}:3001"  # NGINX router (main entry point)
+      # Note: Project ports 4000-4999 are internal to the container
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/automated-deployment
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_USE_SSL=false
+      - SERVER_IP=${SERVER_IP:-localhost}
+      - HOST_SERVICE_PORT=${HOST_SERVICE_PORT:-3001}
+      - REGISTRY_PATH=/app/registry/port-registry.json
+      - PROJECTS_PATH=/app/projects
+    volumes:
+      - project_data:/app/projects
+      - host_registry:/app/registry
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
     networks:
       - ads-network
     restart: unless-stopped
@@ -281,6 +317,8 @@ volumes:
   git_mirrors:
   kafka_data:
   rsa_keys:
+  project_data:      # Host service - stores downloaded project files
+  host_registry:     # Host service - stores port-registry.json
 
 networks:
   ads-network:

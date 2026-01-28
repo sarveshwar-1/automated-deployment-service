@@ -53,6 +53,11 @@ const buildQueue = new Queue("builds", {
   connection: redis,
 });
 
+// Queue for notifying host-service to start project servers
+const hostJobsQueue = new Queue("host-jobs", {
+  connection: redis,
+});
+
 // Deployment type configurations
 interface DeploymentConfig {
   installCommand: string;
@@ -598,6 +603,24 @@ const buildWorker = new Worker(
       } catch (dbErr: any) {
         console.error(`❌ Failed to update database status: ${dbErr.message}`);
       }
+
+      // Notify host-service to start the project server
+      try {
+        const effectiveDeploymentType = deploymentType || 'vite-react-ts';
+        const effectiveOutputDir = outputDir || DEPLOYMENT_CONFIGS[effectiveDeploymentType]?.outputDir || 'dist';
+        
+        await hostJobsQueue.add('start', {
+          action: 'start',
+          projectId,
+          deploymentType: effectiveDeploymentType,
+          outputDir: effectiveOutputDir,
+        });
+        console.log(`📤 Queued host-job to start project ${projectId}`);
+      } catch (hostErr: any) {
+        console.error(`⚠️ Failed to queue host-job: ${hostErr.message}`);
+        // Don't throw - build was successful, hosting can be retried
+      }
+
       console.log(`✅ Build completed for project ${projectId} (type: ${deploymentType || 'vite-react-ts'})`);
       return { success: true, projectId, filesUploaded: uploadedCount, deploymentType, logPath };
     } catch (err: any) {
