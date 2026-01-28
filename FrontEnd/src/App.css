@@ -49,6 +49,13 @@ body {
   transform: scale(1.02);
 }
 
+.nav-logo {
+  height: 60px;
+  padding-top: 10px;
+  width: auto;
+  object-fit: contain;
+}
+
 .nav-links {
   display: flex;
   gap: 24px;

@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import LogAnalytics from './pages/LogAnalytics';
 import TestLogAnalytics from './pages/TestLogAnalytics';
 import './App.css';
+import logo from './assets/logo.png';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -28,7 +29,9 @@ function App() {
     <Router>
       <div className="app-container">
         <nav className="navbar">
-          <div className="nav-brand">Vercel Clone</div>
+          <div className="nav-brand">
+            <img src={logo} alt="Logo" className="nav-logo" />
+          </div>
           {isAuthenticated && (
             <div className="nav-links">
               <a href="/deploy">Deploy</a>
