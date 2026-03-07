@@ -8,6 +8,7 @@ import ViewProjects from './pages/ViewProjects';
 import Dashboard from './pages/Dashboard';
 import LogAnalytics from './pages/LogAnalytics';
 import TestLogAnalytics from './pages/TestLogAnalytics';
+import SecurityDemo from './pages/SecurityDemo';
 import './App.css';
 import logo from './assets/logo.png';
 
@@ -36,6 +37,7 @@ function App() {
             <div className="nav-links">
               <a href="/deploy">Deploy</a>
               <a href="/projects">My Projects</a>
+              <a href="/security-demo">Security Demo</a>
               <button 
                 onClick={() => {
                   localStorage.removeItem('token');
@@ -81,6 +83,10 @@ function App() {
           <Route 
             path="/test-analytics" 
             element={isAuthenticated ? <TestLogAnalytics /> : <Navigate to="/signin" />} 
+          />
+          <Route 
+            path="/security-demo" 
+            element={isAuthenticated ? <SecurityDemo /> : <Navigate to="/signin" />} 
           />
           <Route 
             path="/" 

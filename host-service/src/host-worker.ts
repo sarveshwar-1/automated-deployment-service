@@ -12,8 +12,9 @@ const redis = new Redis({
 });
 
 // Queue for receiving jobs from build-service
+// Cast to any to handle ioredis version mismatch between direct dep and bullmq's bundled version
 const hostQueue = new Queue('host-jobs', {
-  connection: redis,
+  connection: redis as any,
 });
 
 // Job types
@@ -66,7 +67,7 @@ const hostWorker = new Worker(
     }
   },
   {
-    connection: redis,
+    connection: redis as any,
     concurrency: 5, // Process up to 5 jobs concurrently
   }
 );

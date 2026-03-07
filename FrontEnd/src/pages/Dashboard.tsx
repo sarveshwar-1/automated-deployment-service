@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import "../styles/Dashboard.css";
-import { API_URL, BUILD_SERVICE_URL } from "../config";
+import { API_URL, BUILD_SERVICE_URL, HOST_SERVICE_URL } from "../config";
 
 interface ProjectDetails {
   _id: string;
@@ -237,7 +237,7 @@ function Dashboard() {
         <div className="nav-actions">
           {project.buildStatus === 'success' && (
             <a 
-              href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
+              href={`${HOST_SERVICE_URL}/${project.projectId}/`}
               target="_blank"
               rel="noopener noreferrer"
               className="nav-btn nav-btn-primary"
@@ -316,12 +316,12 @@ function Dashboard() {
                         <div>
                           <p className="deployment-message">Your project is live and running</p>
                           <a 
-                            href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
+                            href={`${HOST_SERVICE_URL}/${project.projectId}/`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="deployment-url"
                           >
-                            {BUILD_SERVICE_URL.replace(/^https?:\/\//, '')}/{project.projectId}
+                            {HOST_SERVICE_URL.replace(/^https?:\/\//, '')}/{project.projectId}
                           </a>
                         </div>
                       </div>
@@ -706,6 +706,7 @@ function LogAnalyticsTab({ projectId }: { projectId: string }) {
             onClick={runAnalytics}
             disabled={loading}
             className="run-analytics-btn"
+            type="button"
           >
             {loading ? "Loading..." : analytics ? "Refresh" : "Run Analysis"}
           </button>
@@ -731,7 +732,7 @@ function LogAnalyticsTab({ projectId }: { projectId: string }) {
             <p>Your site hasn't received any visits yet. Once users access your deployed project, you'll see analytics here.</p>
             <div className="empty-actions">
               <a 
-                href={`${BUILD_SERVICE_URL}/${projectId}`} 
+                href={`${HOST_SERVICE_URL}/${projectId}`} 
                 target="_blank" 
                 rel="noopener noreferrer"
                 className="visit-site-btn"

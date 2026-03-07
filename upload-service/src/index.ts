@@ -889,6 +889,79 @@ app.put('/admin/users/:userId/role', authMiddleware, requireRole(['admin']), asy
 });
 
 // ===================
+// SECURITY DEMO ENDPOINT
+// ===================
+
+/**
+ * Security Info - Returns security metadata for the demo dashboard
+ */
+app.get('/security/info', authMiddleware, async (req: AuthRequest, res: Response) => {
+  const { getPermissions } = await import('./middleware/rbac');
+
+  const permissions = getPermissions(req.role || 'viewer');
+
+  const allPermissions = [
+    'project:create',
+    'project:read:own',
+    'project:read:all',
+    'project:delete:own',
+    'project:delete:all',
+    'user:manage'
+  ];
+
+  const permissionMatrix = {
+    admin: allPermissions,
+    developer: ['project:create', 'project:read:own', 'project:delete:own'],
+    viewer: ['project:read:own']
+  };
+
+  res.json({
+    user: {
+      role: req.role,
+      permissions
+    },
+    token: {
+      algorithm: 'RS256',
+      accessTokenExpiry: '15 minutes',
+      refreshTokenExpiry: '7 days',
+      keyType: 'RSA-2048'
+    },
+    rbac: {
+      roles: ['admin', 'developer', 'viewer'],
+      allPermissions,
+      permissionMatrix
+    },
+    activeFeatures: [
+      { name: 'RS256 JWT Signing', category: 'Cryptography', co: 'CO1' },
+      { name: 'AES-256-GCM Config Encryption', category: 'Cryptography', co: 'CO1' },
+      { name: 'RSA-SHA256 Artifact Signing', category: 'Cryptography', co: 'CO1' },
+      { name: 'Token Refresh (Kerberos-like)', category: 'Authentication', co: 'CO2' },
+      { name: 'Role-Based Access Control', category: 'Authorization', co: 'CO2' },
+      { name: 'Password Complexity & Lockout', category: 'Authentication', co: 'CO2' },
+      { name: 'Rate Limiting', category: 'Intrusion Prevention', co: 'CO3' },
+      { name: 'Input Validation & SSRF Prevention', category: 'Intrusion Prevention', co: 'CO3' },
+      { name: 'Security Headers (Helmet)', category: 'Network Security', co: 'CO4' },
+      { name: 'CORS Hardening', category: 'Network Security', co: 'CO4' },
+      { name: 'TLS/HTTPS Configuration', category: 'Network Security', co: 'CO4' },
+      { name: 'mTLS Service-to-Service', category: 'Network Security', co: 'CO4' },
+      { name: 'Docker Security Hardening', category: 'Hardening', co: 'CO3' },
+      { name: 'Environment Validation', category: 'Hardening', co: 'CO3' }
+    ],
+    headers: {
+      note: 'Security headers are applied by Helmet.js middleware',
+      configured: [
+        'Content-Security-Policy',
+        'X-Content-Type-Options',
+        'X-Frame-Options',
+        'Strict-Transport-Security',
+        'Referrer-Policy',
+        'Permissions-Policy'
+      ]
+    }
+  });
+});
+
+// ===================
 // START SERVER
 // ===================
 const PORT = process.env.PORT || 3000;

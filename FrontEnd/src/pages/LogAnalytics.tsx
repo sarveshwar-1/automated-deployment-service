@@ -1,7 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import "../styles/LogAnalytics.css";
-import { BUILD_SERVICE_URL } from "../config";
+import { BUILD_SERVICE_URL, HOST_SERVICE_URL, ISOLATION_THRESHOLD_RPM } from "../config";
 
 interface AnalyticsStep {
   id: string;
@@ -47,6 +47,50 @@ interface AnalyticsResults {
   };
 }
 
+interface LoadBalanceStatus {
+  status: "idle" | "pending" | "active";
+  endpoint?: string;
+  peakRpm?: number;
+  threshold: number;
+  assignedPort?: number;
+  detectedAt?: string;
+}
+
+const normalizeEndpoint = (path: string): string => {
+  const match = path.match(/^\/[^/]+/);
+  return match ? match[0] : "/";
+};
+
+const getPeakRpmByEndpoint = (logs: LogEntry[]): { endpoint?: string; peakRpm: number } => {
+  const endpointMinuteCounts = new Map<string, Map<string, number>>();
+
+  logs.forEach((log) => {
+    const endpoint = normalizeEndpoint(log.path);
+    const minuteKey = log.timestamp.toISOString().slice(0, 16);
+
+    if (!endpointMinuteCounts.has(endpoint)) {
+      endpointMinuteCounts.set(endpoint, new Map());
+    }
+
+    const minuteMap = endpointMinuteCounts.get(endpoint)!;
+    minuteMap.set(minuteKey, (minuteMap.get(minuteKey) || 0) + 1);
+  });
+
+  let topEndpoint: string | undefined;
+  let topPeak = 0;
+
+  for (const [endpoint, minuteMap] of endpointMinuteCounts.entries()) {
+    for (const count of minuteMap.values()) {
+      if (count > topPeak) {
+        topPeak = count;
+        topEndpoint = endpoint;
+      }
+    }
+  }
+
+  return { endpoint: topEndpoint, peakRpm: topPeak };
+};
+
 function LogAnalytics() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -67,6 +111,8 @@ function LogAnalytics() {
   const [results, setResults] = useState<AnalyticsResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [loadBalanceStatus, setLoadBalanceStatus] = useState<LoadBalanceStatus | null>(null);
+  const [isolatedEndpoints, setIsolatedEndpoints] = useState<Record<string, number>>({});
 
   const updateStepStatus = useCallback((stepId: string, status: AnalyticsStep["status"], result?: Record<string, string | number>) => {
     setSteps(prev => prev.map(step => 
@@ -75,6 +121,53 @@ function LogAnalytics() {
   }, []);
 
   const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  useEffect(() => {
+    if (!projectId) return;
+
+    let isActive = true;
+
+    const fetchIsolationState = async () => {
+      try {
+        const response = await fetch(`${HOST_SERVICE_URL}/api/projects/${projectId}`);
+        if (!response.ok) return;
+        const data = await response.json();
+        const endpoints = data?.isolatedEndpoints || {};
+        if (isActive) {
+          setIsolatedEndpoints(endpoints);
+        }
+      } catch (err) {
+        // Silently ignore polling errors to avoid UI noise
+      }
+    };
+
+    fetchIsolationState();
+    const intervalId = setInterval(fetchIsolationState, 10000);
+
+    return () => {
+      isActive = false;
+      clearInterval(intervalId);
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (Object.keys(isolatedEndpoints).length === 0) return;
+
+    setLoadBalanceStatus((prev) => {
+      const preferredEndpoint = prev?.endpoint && isolatedEndpoints[prev.endpoint]
+        ? prev.endpoint
+        : Object.keys(isolatedEndpoints)[0];
+
+      return {
+        status: "active",
+        endpoint: preferredEndpoint,
+        peakRpm: prev?.peakRpm,
+        threshold: prev?.threshold ?? ISOLATION_THRESHOLD_RPM,
+        assignedPort: isolatedEndpoints[preferredEndpoint],
+        detectedAt: prev?.detectedAt ?? new Date().toISOString(),
+      };
+    });
+  }, [isolatedEndpoints]);
 
   // Step 1: Fetch logs from build service API
   const fetchLogs = async (): Promise<LogEntry[]> => {
@@ -388,11 +481,13 @@ function LogAnalytics() {
   };
 
   const runAnalytics = async () => {
+    if (isRunning) return;
     setIsRunning(true);
     setError(null);
     setResults(null);
     setProgress(0);
-    
+    setLoadBalanceStatus(null);
+
     setSteps(prev => prev.map(step => ({ ...step, status: "pending", result: undefined })));
 
     try {
@@ -401,7 +496,29 @@ function LogAnalytics() {
       const logs = await fetchLogs();
 
       if (logs.length === 0) {
-        throw new Error("No logs found for this project. Visit your deployed site to generate logs.");
+        setError("No logs found for this project. Visit your deployed site to generate logs.");
+        return;
+      }
+
+      const { endpoint, peakRpm } = getPeakRpmByEndpoint(logs);
+      const threshold = ISOLATION_THRESHOLD_RPM;
+      if (endpoint && peakRpm >= threshold) {
+        const assignedPort = isolatedEndpoints[endpoint];
+        setLoadBalanceStatus({
+          status: assignedPort ? "active" : "pending",
+          endpoint,
+          peakRpm,
+          threshold,
+          assignedPort,
+          detectedAt: new Date().toISOString(),
+        });
+      } else {
+        setLoadBalanceStatus({
+          status: "idle",
+          endpoint,
+          peakRpm,
+          threshold,
+        });
       }
 
       setCurrentStep(1);
@@ -417,7 +534,7 @@ function LogAnalytics() {
       const hourlyData = await aggregateData(cleaned);
 
       if (hourlyData.length < 2) {
-        throw new Error("Insufficient data for time series analysis. Need at least 2 hours of data.");
+        setError("Insufficient data for time series analysis. Need at least 2 hours of data.");
       }
 
       setCurrentStep(4);
@@ -455,6 +572,17 @@ function LogAnalytics() {
     }
   };
 
+  useEffect(() => {
+    if (!projectId) return;
+
+    runAnalytics();
+    const intervalId = setInterval(() => {
+      runAnalytics();
+    }, 30000);
+
+    return () => clearInterval(intervalId);
+  }, [projectId]);
+
   return (
     <div className="analytics-wrapper">
       <div className="analytics-nav">
@@ -469,13 +597,10 @@ function LogAnalytics() {
         <div className="pipeline-section">
           <div className="section-header">
             <h2>Analysis Pipeline</h2>
-            <button 
-              className="run-btn"
-              onClick={runAnalytics}
-              disabled={isRunning}
-            >
-              {isRunning ? "Running..." : "Run Analysis"}
-            </button>
+            <div className="auto-status">
+              <span className={`auto-indicator ${isRunning ? "running" : "idle"}`} />
+              <span>{isRunning ? "Auto-detecting traffic..." : "Auto-detect enabled"}</span>
+            </div>
           </div>
 
           <div className="progress-container">
@@ -533,6 +658,44 @@ function LogAnalytics() {
             </div>
           )}
         </div>
+
+        {loadBalanceStatus && loadBalanceStatus.status !== "idle" && (
+          <div className={`load-balance-card ${loadBalanceStatus.status}`}>
+            <div className="load-balance-header">
+              <div className="load-balance-title">Auto-Scaling Alert</div>
+              <span className={`load-balance-badge ${loadBalanceStatus.status}`}>
+                {loadBalanceStatus.status === "active" ? "Active" : "Pending"}
+              </span>
+            </div>
+            <div className="load-balance-body">
+              <div className="load-balance-row">
+                <span className="load-balance-label">Endpoint</span>
+                <span className="load-balance-value">{loadBalanceStatus.endpoint}</span>
+              </div>
+              <div className="load-balance-row">
+                <span className="load-balance-label">Peak Requests/min</span>
+                <span className="load-balance-value">
+                  {loadBalanceStatus.peakRpm?.toLocaleString() ?? "—"}
+                </span>
+              </div>
+              <div className="load-balance-row">
+                <span className="load-balance-label">Threshold</span>
+                <span className="load-balance-value">{loadBalanceStatus.threshold.toLocaleString()}</span>
+              </div>
+              <div className="load-balance-row">
+                <span className="load-balance-label">New Port</span>
+                <span className="load-balance-value">
+                  {loadBalanceStatus.assignedPort ? loadBalanceStatus.assignedPort : "Allocating..."}
+                </span>
+              </div>
+            </div>
+            <div className="load-balance-footer">
+              {loadBalanceStatus.status === "active"
+                ? `Traffic is now routed to a dedicated server on port ${loadBalanceStatus.assignedPort}.`
+                : "High traffic detected. This endpoint will be moved to a new server at a new port once allocation completes."}
+            </div>
+          </div>
+        )}
 
         {results && (
           <div className="results-section">

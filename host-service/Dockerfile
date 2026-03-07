@@ -3,8 +3,12 @@
 
 FROM openresty/openresty:alpine
 
-# Install Node.js 20 and PM2
-RUN apk add --no-cache nodejs npm python3 make g++ git && \
+# Configure Alpine repositories (main + community) and install Node.js + build tools
+RUN ALPINE_VERSION=$(cut -d. -f1,2 /etc/alpine-release) && \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/main" > /etc/apk/repositories && \
+    echo "https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/community" >> /etc/apk/repositories && \
+    apk update && \
+    apk add --no-cache ca-certificates nodejs npm python3 make g++ git && \
     npm install -g pm2 pnpm typescript
 
 # Security: Create app user

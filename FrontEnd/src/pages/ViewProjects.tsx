@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import "../styles/ViewProjects.css";
-import { API_URL, BUILD_SERVICE_URL } from "../config";
+import { API_URL, HOST_SERVICE_URL } from "../config";
 
 interface Project {
   _id: string;
@@ -185,12 +185,12 @@ function ViewProjects() {
                     <div className="info-row">
                       <label>Preview URL</label>
                       <a
-                        href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
+                        href={`${HOST_SERVICE_URL}/${project.projectId}/`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="preview-link"
                       >
-                        {`${BUILD_SERVICE_URL}/${project.projectId}/`}
+                        {`${HOST_SERVICE_URL}/${project.projectId}/`}
                       </a>
                     </div>
                   )}
@@ -219,7 +219,7 @@ function ViewProjects() {
                   </Link>
                   {project.buildStatus === 'success' ? (
                     <a
-                      href={`${BUILD_SERVICE_URL}/${project.projectId}/`}
+                      href={`${HOST_SERVICE_URL}/${project.projectId}/`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="preview-btn"

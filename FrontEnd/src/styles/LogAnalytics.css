@@ -70,6 +70,31 @@
   margin: 0;
 }
 
+.auto-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #9aa4af;
+  background: #0f0f0f;
+  border: 1px solid #222222;
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.auto-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4b5563;
+  box-shadow: 0 0 0 2px rgba(75, 85, 99, 0.2);
+}
+
+.auto-indicator.running {
+  background: #2ecc71;
+  box-shadow: 0 0 0 4px rgba(46, 204, 113, 0.2);
+}
+
 .run-btn {
   background: #ffffff;
   color: #000000;
@@ -80,6 +105,9 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
 }
 
 .run-btn:hover:not(:disabled) {
@@ -119,6 +147,88 @@
   color: #666666;
   font-family: monospace;
   min-width: 40px;
+}
+
+/* Load Balancing Status Card */
+.load-balance-card {
+  background: #0f141a;
+  border: 1px solid #1f2933;
+  border-left: 4px solid #f5a623;
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.load-balance-card.active {
+  border-left-color: #2ecc71;
+  background: #0f1a14;
+}
+
+.load-balance-card.pending {
+  border-left-color: #f5a623;
+}
+
+.load-balance-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.load-balance-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.load-balance-badge {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #3a3a3a;
+  color: #f5a623;
+  background: rgba(245, 166, 35, 0.15);
+}
+
+.load-balance-badge.active {
+  color: #2ecc71;
+  border-color: rgba(46, 204, 113, 0.4);
+  background: rgba(46, 204, 113, 0.18);
+}
+
+.load-balance-body {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.load-balance-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.load-balance-label {
+  font-size: 11px;
+  color: #7c8793;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.load-balance-value {
+  font-size: 14px;
+  color: #e5e5e5;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.load-balance-footer {
+  font-size: 12px;
+  color: #b0b8c4;
 }
 
 /* Pipeline Steps */

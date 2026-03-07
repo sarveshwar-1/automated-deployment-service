@@ -347,9 +347,15 @@ function rewriteAssetPaths(content: string, projectId: string, fileType: string)
     content = content.replace(/"\/static\//g, `"/${projectId}/static/`);
     content = content.replace(/'\/static\//g, `'/${projectId}/static/`);
 
+    // Rewrite "/assets/" patterns commonly used in Vite builds
+    content = content.replace(/"\/assets\//g, `"/${projectId}/assets/`);
+    content = content.replace(/'\/assets\//g, `'/${projectId}/assets/`);
+
     // Rewrite manifest.json and other root-level assets
     content = content.replace(/"\/manifest\.json"/g, `"/${projectId}/manifest.json"`);
     content = content.replace(/"\/favicon\.ico"/g, `"/${projectId}/favicon.ico"`);
+    content = content.replace(/"\/favicon\.svg"/g, `"/${projectId}/favicon.svg"`);
+    content = content.replace(/"\/vite\.svg"/g, `"/${projectId}/vite.svg"`);
   }
 
   // For CSS files, rewrite url() references
